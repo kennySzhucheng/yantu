@@ -1,0 +1,272 @@
+package com.monesy.kaoyan
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(store: Store, settings: Settings, onOpenConfig: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    var showMorningTime by remember { mutableStateOf(false) }
+    var showEveningTime by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    var notifGranted by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < 33 ||
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        notifGranted = it
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notifGranted = Build.VERSION.SDK_INT < 33 ||
+                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    fun change(block: suspend () -> Unit) {
+        scope.launch {
+            block()
+            Notify.scheduleAll(context)
+        }
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("设置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+
+        // ---- 通知提醒 ----
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("每日通知", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "通知内容会自动附上最近的重大节点倒计时",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("早晨 · 单词提醒", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            "每天 ${settings.morningTime.format(DateTimeFormatter.ofPattern("HH:mm"))} · 点击修改时间",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                .clickable { showMorningTime = true },
+                        )
+                    }
+                    Switch(
+                        checked = settings.morningEnabled,
+                        onCheckedChange = { on -> change { store.setMorningEnabled(on) } },
+                    )
+                }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.surfaceVariant)
+
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("晚上 · 自习提醒", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            "每天 ${settings.eveningTime.format(DateTimeFormatter.ofPattern("HH:mm"))} · 点击修改时间",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                .clickable { showEveningTime = true },
+                        )
+                    }
+                    Switch(
+                        checked = settings.eveningEnabled,
+                        onCheckedChange = { on -> change { store.setEveningEnabled(on) } },
+                    )
+                }
+
+                Spacer(Modifier.padding(top = 8.dp))
+                if (notifGranted) {
+                    Text("✅ 通知权限已授予", fontSize = 13.sp, color = MaterialTheme.colorScheme.secondary)
+                } else {
+                    Button(onClick = { permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }) {
+                        Text("授予通知权限（必需）")
+                    }
+                }
+            }
+        }
+
+        // ---- 考试日期 ----
+        Card(Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("初试日期（预计）", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        "${settings.examDate.year}年${settings.examDate.monthValue}月${settings.examDate.dayOfMonth}日 · 官方目录 2027年9月公布后如有变动请在此修改",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = { showDatePicker = true }) { Text("修改") }
+            }
+        }
+
+        // ---- 配置管理入口 ----
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("配置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "课表导入（Excel/手动）、计划模板、考试信息、导入导出、节假日",
+                    fontSize = 12.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = onOpenConfig) { Text("打开配置管理") }
+            }
+        }
+
+        // ---- 关于 ----
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("关于", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(Config.aboutGoal, fontSize = 13.sp)
+                Text(Config.aboutSubjects, fontSize = 13.sp)
+                Text(Config.aboutTarget, fontSize = 13.sp)
+                Text(Config.aboutSource, fontSize = 13.sp)
+                Text("${Config.appTitle} v1.0 · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        // ---- 通知保活提示（通用，放最后） ----
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            ),
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                Text("📌 收不到定时提醒？", fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "多数安卓系统默认限制应用在后台运行。请在 系统设置 → 电池 / 应用管理 中允许本应用「后台运行 / 自启动」" +
+                        "（vivo/OPPO 一般在「电池」里，小米在「省电与电池」，华为在「应用启动管理」），并在最近任务里给卡片加锁，" +
+                        "否则通知可能被延迟。",
+                    fontSize = 12.5.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+    }
+
+    // ---- 时间选择弹窗 ----
+    if (showMorningTime) {
+        val st = rememberTimePickerState(settings.morningTime.hour, settings.morningTime.minute, is24Hour = true)
+        AlertDialog(
+            onDismissRequest = { showMorningTime = false },
+            title = { Text("早晨提醒时间") },
+            text = { TimePicker(state = st) },
+            confirmButton = {
+                TextButton(onClick = {
+                    change { store.setMorningTime(LocalTime.of(st.hour, st.minute)) }
+                    showMorningTime = false
+                }) { Text("确定") }
+            },
+            dismissButton = { TextButton(onClick = { showMorningTime = false }) { Text("取消") } },
+        )
+    }
+    if (showEveningTime) {
+        val st = rememberTimePickerState(settings.eveningTime.hour, settings.eveningTime.minute, is24Hour = true)
+        AlertDialog(
+            onDismissRequest = { showEveningTime = false },
+            title = { Text("晚上提醒时间") },
+            text = { TimePicker(state = st) },
+            confirmButton = {
+                TextButton(onClick = {
+                    change { store.setEveningTime(LocalTime.of(st.hour, st.minute)) }
+                    showEveningTime = false
+                }) { Text("确定") }
+            },
+            dismissButton = { TextButton(onClick = { showEveningTime = false }) { Text("取消") } },
+        )
+    }
+    if (showDatePicker) {
+        val st = rememberDatePickerState(
+            initialSelectedDateMillis = settings.examDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    st.selectedDateMillis?.let { millis ->
+                        val d = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
+                        change { store.setExamDate(d) }
+                    }
+                    showDatePicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("取消") } },
+        ) {
+            DatePicker(state = st)
+        }
+    }
+}

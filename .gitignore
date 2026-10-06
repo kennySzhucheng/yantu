@@ -1,0 +1,22 @@
+# 构建产物
+build/
+.gradle/
+.kotlin/
+*.apk
+*.aab
+
+# 本机配置（含 SDK 路径等）
+local.properties
+
+# 签名密钥（切勿提交）
+release.keystore
+keystore.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# 验证截图临时目录
+verify/
+tools/push_via_api.py
