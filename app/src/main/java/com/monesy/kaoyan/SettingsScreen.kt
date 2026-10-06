@@ -22,6 +22,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -54,13 +55,25 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(store: Store, settings: Settings, onOpenConfig: () -> Unit) {
+fun SettingsScreen(
+    store: Store,
+    settings: Settings,
+    themeMode: String,
+    themeDarkStart: String,
+    themeDarkEnd: String,
+    onThemeChange: (String) -> Unit,
+    onDarkStartChange: (String) -> Unit,
+    onDarkEndChange: (String) -> Unit,
+    onOpenConfig: () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var showMorningTime by remember { mutableStateOf(false) }
     var showEveningTime by remember { mutableStateOf(false) }
+    var showDarkStart by remember { mutableStateOf(false) }
+    var showDarkEnd by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
 
     var notifGranted by remember {
@@ -98,6 +111,39 @@ fun SettingsScreen(store: Store, settings: Settings, onOpenConfig: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("设置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+
+        // ---- 外观 ----
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("外观", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf("light" to "浅色", "dark" to "深色", "scheduled" to "定时").forEach { (value, label) ->
+                        FilterChip(
+                            selected = themeMode == value,
+                            onClick = { onThemeChange(value) },
+                            label = { Text(label) },
+                        )
+                    }
+                }
+                if (themeMode == "scheduled") {
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TextButton(onClick = { showDarkStart = true }) { Text("开深色：$themeDarkStart") }
+                        TextButton(onClick = { showDarkEnd = true }) { Text("关深色：$themeDarkEnd") }
+                    }
+                    Text(
+                        "每天到点自动切换（支持跨夜，如 22:00 开、07:00 关）",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
 
         // ---- 通知提醒 ----
         Card(Modifier.fillMaxWidth()) {
@@ -193,7 +239,7 @@ fun SettingsScreen(store: Store, settings: Settings, onOpenConfig: () -> Unit) {
                 Text(Config.aboutSubjects, fontSize = 13.sp)
                 Text(Config.aboutTarget, fontSize = 13.sp)
                 Text(Config.aboutSource, fontSize = 13.sp)
-                Text("${Config.appTitle} v1.0 · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${Config.appTitle} v1.0.1 · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
@@ -247,6 +293,38 @@ fun SettingsScreen(store: Store, settings: Settings, onOpenConfig: () -> Unit) {
                 }) { Text("确定") }
             },
             dismissButton = { TextButton(onClick = { showEveningTime = false }) { Text("取消") } },
+        )
+    }
+    if (showDarkStart) {
+        val init = runCatching { LocalTime.parse(themeDarkStart) }.getOrDefault(LocalTime.of(22, 0))
+        val st = rememberTimePickerState(init.hour, init.minute, is24Hour = true)
+        AlertDialog(
+            onDismissRequest = { showDarkStart = false },
+            title = { Text("每天开深色的时间") },
+            text = { TimePicker(state = st) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDarkStartChange("%02d:%02d".format(st.hour, st.minute))
+                    showDarkStart = false
+                }) { Text("确定") }
+            },
+            dismissButton = { TextButton(onClick = { showDarkStart = false }) { Text("取消") } },
+        )
+    }
+    if (showDarkEnd) {
+        val init = runCatching { LocalTime.parse(themeDarkEnd) }.getOrDefault(LocalTime.of(7, 0))
+        val st = rememberTimePickerState(init.hour, init.minute, is24Hour = true)
+        AlertDialog(
+            onDismissRequest = { showDarkEnd = false },
+            title = { Text("每天关深色的时间") },
+            text = { TimePicker(state = st) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDarkEndChange("%02d:%02d".format(st.hour, st.minute))
+                    showDarkEnd = false
+                }) { Text("确定") }
+            },
+            dismissButton = { TextButton(onClick = { showDarkEnd = false }) { Text("取消") } },
         )
     }
     if (showDatePicker) {

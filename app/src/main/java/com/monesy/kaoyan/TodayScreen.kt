@@ -5,7 +5,6 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,7 +88,7 @@ fun TodayScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         // ---- 倒计时 ----
-        val heroBg = if (isSystemInDarkTheme()) Color(0xFF1E3A5C) else MaterialTheme.colorScheme.primary
+        val heroBg = if (LocalIsDark.current) Color(0xFF1E3A5C) else MaterialTheme.colorScheme.primary
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(

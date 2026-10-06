@@ -14,7 +14,7 @@
 - 🔔 **定时提醒**：早晨单词 / 晚自习 / 21:00 底线警戒 / 周日晚报；通知可**一键“已背单词”**或**“稍后提醒”**；关机错过自动补发（带补发窗口判断）
 - 📚 **课表导入（三种方式）**：教务系统导出的 **Excel 直接解析**（.xls/.xlsx，解析结果可人工修正）；表单手动添加；导入同学分享的配置文件
 - 📅 **日历日程**：只读读取手机日历当天日程（可选授权）
-- 🎨 **深色模式**：跟随系统
+- 🎨 **深浅色外观**：浅色 / 深色 / 定时切换（自定义开、关时间，支持跨夜）
 - 🌙 **补卡**：最近两天可补记（标注“已补记”）
 - 💾 **数据备份**：打卡历史/奖励日志/全部配置一键导出，换机导入还原
 
@@ -23,6 +23,24 @@
 1. **首次启动向导**：4 步填完考试信息、目标院校、科目/老师/已完成进度 → 自动生成个性化计划
 2. **表单编辑器**：设置 → 配置管理 → 编辑当前计划；阶段 / 日任务模板 / 重大节点全部表单化增删改
 3. **JSON（进阶）**：导出空模板（含字段说明）填写后导入；或导出完整配置分享给同学一键回填
+
+## 截图
+
+**浅色模式**（功能展示）
+
+| 今日 | 阶段打卡 |
+|---|---|
+| ![今日](docs/screenshots/1-today-light.png) | ![阶段打卡](docs/screenshots/2-stages-light.png) |
+
+| 重大节点 | 设置（外观切换） |
+|---|---|
+| ![节点](docs/screenshots/3-nodes-light.png) | ![设置](docs/screenshots/4-settings-light.png) |
+
+**深色模式**（设置 → 外观：浅色 / 深色 / 定时）
+
+| 今日 | 阶段打卡 |
+|---|---|
+| ![今日·深色](docs/screenshots/5-today-dark.png) | ![阶段打卡·深色](docs/screenshots/6-stages-dark.png) |
 
 ## 安装
 
@@ -71,3 +89,8 @@ keytool -genkeypair -v -keystore release.keystore -alias yantu \
 ## 许可
 
 [MIT](LICENSE)
+
+## 第三方依赖
+
+- AndroidX / Jetpack Compose / WorkManager / DataStore（Apache-2.0）
+- [jxl — JExcelApi](http://jexcelapi.sourceforge.net/)（LGPL-2.1，用于解析教务系统的 .xls 课表导出）

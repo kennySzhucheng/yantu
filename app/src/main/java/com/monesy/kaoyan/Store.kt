@@ -42,6 +42,32 @@ class Store(private val context: Context) {
     private val KEY_REWARD_JOURNAL = stringPreferencesKey("reward_journal")
     private val KEY_USER_CONFIG = stringPreferencesKey("user_config")
     private val KEY_ONBOARDED = booleanPreferencesKey("onboarded")
+    private val KEY_THEME = stringPreferencesKey("theme_mode")
+    private val KEY_THEME_DARK_START = stringPreferencesKey("theme_dark_start")
+    private val KEY_THEME_DARK_END = stringPreferencesKey("theme_dark_end")
+
+    // ---------- 外观（light / dark / scheduled + 定时时段） ----------
+
+    /** 兼容旧值：历史 "system" 迁移为 "light" */
+    val themeMode: Flow<String> = context.dataStore.data.map {
+        when (val v = it[KEY_THEME] ?: "light") {
+            "system" -> "light"
+            else -> v
+        }
+    }
+
+    /** 定时模式下：几点开深色 / 几点关深色（HH:mm，支持跨夜） */
+    val themeDarkStart: Flow<String> = context.dataStore.data.map { it[KEY_THEME_DARK_START] ?: "22:00" }
+    val themeDarkEnd: Flow<String> = context.dataStore.data.map { it[KEY_THEME_DARK_END] ?: "07:00" }
+
+    suspend fun setThemeMode(mode: String) =
+        context.dataStore.edit { it[KEY_THEME] = mode }
+
+    suspend fun setThemeDarkStart(t: String) =
+        context.dataStore.edit { it[KEY_THEME_DARK_START] = t }
+
+    suspend fun setThemeDarkEnd(t: String) =
+        context.dataStore.edit { it[KEY_THEME_DARK_END] = t }
 
     // ---------- 用户配置层（向导/编辑/导入 都写这里） ----------
 

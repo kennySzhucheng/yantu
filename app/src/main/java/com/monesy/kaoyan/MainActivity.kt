@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,11 +20,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -43,24 +46,74 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.time.LocalTime
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            KaoyanTheme {
+            val context = LocalContext.current
+            val store = remember { Store(context) }
+            val themeMode by store.themeMode.collectAsState(initial = "light")
+            val darkStart by store.themeDarkStart.collectAsState(initial = "22:00")
+            val darkEnd by store.themeDarkEnd.collectAsState(initial = "07:00")
+            val dark = when (themeMode) {
+                "dark" -> true
+                "light" -> false
+                else -> scheduledDarkNow(darkStart, darkEnd)
+            }
+            KaoyanTheme(dark) {
                 AppRoot()
             }
         }
     }
 }
 
+/** 当前生效的深色状态（应用外观设置的结果） */
+val LocalIsDark = staticCompositionLocalOf { false }
+
 @Composable
-fun KaoyanTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
-        content = content,
-    )
+fun KaoyanTheme(dark: Boolean, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalIsDark provides dark) {
+        MaterialTheme(
+            colorScheme = if (dark) DarkColors else LightColors,
+            content = content,
+        )
+    }
+}
+
+/** 定时模式：按 HH:mm 时段计算当前是否深色（支持跨夜，如 22:00–07:00） */
+private fun computeScheduledDark(start: String, end: String): Boolean {
+    val s = runCatching { LocalTime.parse(start) }.getOrNull() ?: return false
+    val e = runCatching { LocalTime.parse(end) }.getOrNull() ?: return false
+    val n = LocalTime.now()
+    return if (!s.isAfter(e)) (n >= s && n < e) else (n >= s || n < e)
+}
+
+/** 到下一个切换点还有多少毫秒（用于定时自动切换） */
+private fun millisUntilNextThemeBoundary(start: String, end: String): Long {
+    val s = runCatching { LocalTime.parse(start) }.getOrNull() ?: return 60_000L
+    val e = runCatching { LocalTime.parse(end) }.getOrNull() ?: return 60_000L
+    val now = LocalTime.now()
+    fun nextMs(t: LocalTime): Long {
+        var d = java.time.Duration.between(now, t).toMillis()
+        if (d <= 0) d += 24L * 3600_000L
+        return d
+    }
+    return minOf(nextMs(s), nextMs(e))
+}
+
+/** 定时深色状态（跨过切换点时自动重组刷新） */
+@Composable
+private fun scheduledDarkNow(start: String, end: String): Boolean {
+    var dark by remember { mutableStateOf(computeScheduledDark(start, end)) }
+    LaunchedEffect(start, end) {
+        while (true) {
+            dark = computeScheduledDark(start, end)
+            delay(millisUntilNextThemeBoundary(start, end).coerceAtLeast(5_000L) + 500L)
+        }
+    }
+    return dark
 }
 
 private val LightColors = lightColorScheme(
@@ -140,6 +193,15 @@ fun AppRoot() {
     var subScreen by remember { mutableStateOf<String?>(null) }
     var parsedCourses by remember { mutableStateOf<List<TimetableParser.Course>>(emptyList()) }
     var parseError by remember { mutableStateOf<String?>(null) }
+
+    // 子页面支持系统返回键逐级返回，而不是直接退出应用
+    BackHandler(enabled = subScreen != null) {
+        subScreen = when (subScreen) {
+            "importPreview" -> "timetable"
+            "timetable", "planEditor" -> "config"
+            else -> null
+        }
+    }
 
     fun reloadAfterConfigChange() {
         ConfigLoader.load(context)
@@ -260,6 +322,9 @@ fun AppRoot() {
     }
 
     val settings by store.settings.collectAsState(initial = Settings())
+    val themeMode by store.themeMode.collectAsState(initial = "light")
+    val themeDarkStart by store.themeDarkStart.collectAsState(initial = "22:00")
+    val themeDarkEnd by store.themeDarkEnd.collectAsState(initial = "07:00")
     val today = remember { LocalDate.now() }
     val checked by store.checkinFor(today).collectAsState(initial = emptySet())
     val yesterday = remember { today.minusDays(1) }
@@ -432,6 +497,12 @@ fun AppRoot() {
                 2 -> StagesScreen(today = today, store = store)
                 else -> SettingsScreen(
                     store = store, settings = settings,
+                    themeMode = themeMode,
+                    themeDarkStart = themeDarkStart,
+                    themeDarkEnd = themeDarkEnd,
+                    onThemeChange = { mode -> scope.launch { store.setThemeMode(mode) } },
+                    onDarkStartChange = { t -> scope.launch { store.setThemeDarkStart(t) } },
+                    onDarkEndChange = { t -> scope.launch { store.setThemeDarkEnd(t) } },
                     onOpenConfig = { subScreen = "config" },
                 )
             }
