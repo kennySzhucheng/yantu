@@ -78,16 +78,14 @@
 
 三个下载入口，任选其一（安装包相同）：
 
-**🇨🇳 国内直连（最快）** —— [蓝奏云](https://wwbai.lanzouv.com/imyCz4b5ql8b)
+**🇨🇳 国内直连（最快）** —— [蓝奏云](https://wwbai.lanzouv.com/ipMXc4b65fcj)
 
 | 安装包 | 链接 | 提取码 |
 |---|---|---|
-| `yantu-v1.5.0-arm64.apk`（主流手机） | [蓝奏云下载](https://wwbai.lanzouv.com/imyCz4b5ql8b) | `9x5c` |
-| `yantu-v1.5.0-v7a.apk`（32 位老设备） | [蓝奏云下载](https://wwbai.lanzouv.com/i8PHd4b5qlng) | `8rag` |
+| `rigong-v1.5.1-arm64.apk`（主流手机） | [蓝奏云下载](https://wwbai.lanzouv.com/ipMXc4b65fcj) | `bzar` |
+| `rigong-v1.5.1-v7a.apk`（32 位老设备） | [蓝奏云下载](https://wwbai.lanzouv.com/iOK4v4b65gzi) | `d9d5` |
 
 打开链接 → 输入提取码 → 点「普通下载」，无需登录、无需客户端。
-
-> ⏫ 蓝奏云将随下次上传更新为 v1.5.1（更名版）；当前表格为 v1.5.0 安装包（功能相同，仅应用名不同），最新版请优先用下方 GitHub Releases。
 
 **🌍 GitHub Releases** —— [releases/latest](../../releases/latest)
 
