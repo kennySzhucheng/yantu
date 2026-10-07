@@ -159,7 +159,7 @@
 # 构建 debug
 ./gradlew assembleDebug
 
-# 发布构建（需先配置签名）
+# 发布构建（需先配置签名；下方 alias 名 yantu 为历史签名别名，改名不影响已发布版本，请保持）
 # 1) 生成密钥库：
 keytool -genkeypair -v -keystore release.keystore -alias yantu \
   -keyalg RSA -keysize 2048 -validity 10000
