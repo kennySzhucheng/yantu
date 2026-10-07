@@ -75,8 +75,10 @@ fun TodayScreen(
 ) {
     val stage = Plan.stageFor(today)
     val tasks = Plan.tasksFor(stage, today.dayOfWeek)
-    val days = Plan.daysUntil(settings.examDate, today)
-    val progress = Plan.journeyProgress(today, settings.examDate)
+    // 初试日期唯一真源 = Config.examDate（向导/设置手改都写用户配置层），避免与旧 DataStore 键双轨不同步
+    val examDate = Config.examDate
+    val days = Plan.daysUntil(examDate, today)
+    val progress = Plan.journeyProgress(today, examDate)
     val done = tasks.count { it.id in checked }
     var makeupDate by remember { mutableStateOf<LocalDate?>(null) }
 
@@ -132,7 +134,7 @@ fun TodayScreen(
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "${settings.examDate.year}年${settings.examDate.monthValue}月${settings.examDate.dayOfMonth}日（预计）· 目标 ${Config.targetScore} 分",
+                    "${examDate.year}年${examDate.monthValue}月${examDate.dayOfMonth}日（预计）· 目标 ${Config.targetScore} 分",
                     fontSize = 13.sp,
                 )
                 Spacer(Modifier.height(12.dp))

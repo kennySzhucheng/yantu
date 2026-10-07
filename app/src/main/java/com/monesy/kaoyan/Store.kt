@@ -46,6 +46,7 @@ class Store(private val context: Context) {
     private val KEY_THEME_DARK_START = stringPreferencesKey("theme_dark_start")
     private val KEY_THEME_DARK_END = stringPreferencesKey("theme_dark_end")
     private val KEY_NODE_REMIND = booleanPreferencesKey("node_reminders_enabled")
+    private val KEY_TUTORIAL_VERSION = intPreferencesKey("tutorial_version")
 
     // ---------- 外观（light / dark / scheduled + 定时时段） ----------
 
@@ -145,6 +146,13 @@ class Store(private val context: Context) {
 
     suspend fun setNodeRemindersEnabled(v: Boolean) =
         context.dataStore.edit { it[KEY_NODE_REMIND] = v }
+
+    // ---------- 使用教程版本（教程内容更新后老用户启动时自动重看一次） ----------
+
+    val tutorialVersion: Flow<Int> = context.dataStore.data.map { it[KEY_TUTORIAL_VERSION] ?: 0 }
+
+    suspend fun setTutorialVersion(v: Int) =
+        context.dataStore.edit { it[KEY_TUTORIAL_VERSION] = v }
 
     // ---------- 任务时长覆盖（仅可调任务会写入） ----------
 

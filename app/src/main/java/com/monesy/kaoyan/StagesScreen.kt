@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -28,12 +29,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,11 +48,13 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 @Composable
-fun StagesScreen(today: LocalDate, store: Store) {    val checkins by produceState<Map<LocalDate, Set<String>>>(emptyMap(), today) {
+fun StagesScreen(today: LocalDate, store: Store, onSaveStageTasks: (Int, List<TaskEdit>, List<TaskEdit>, List<TaskEdit>) -> Unit = { _, _, _, _ -> }) {
+    val checkins by produceState<Map<LocalDate, Set<String>>>(emptyMap(), today) {
         value = store.readAllCheckins()
     }
     val currentId = Plan.stageFor(today).id
     val currentStage = Plan.stages.firstOrNull { it.id == currentId }
+    var editingTasks by remember { mutableStateOf<Stage?>(null) }
 
     Column(
         Modifier
@@ -139,11 +145,60 @@ fun StagesScreen(today: LocalDate, store: Store) {    val checkins by produceSta
                         Spacer(Modifier.size(10.dp))
                         HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
                         Spacer(Modifier.size(10.dp))
+                        // ---- 每日任务（就地编辑，不用再进设置 → 计划编辑器） ----
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "每日任务",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = { editingTasks = stage }) { Text("✏️ 编辑") }
+                        }
+                        Text(
+                            "点「编辑」可改本阶段任务的标题、时长与底线；保存立即生效",
+                            fontSize = 10.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        listOf("周一至五" to stage.weekdayTasks, "周六" to stage.saturdayTasks, "周日" to stage.sundayTasks)
+                            .forEach { (label, list) ->
+                                if (list.isNotEmpty()) {
+                                    Text(
+                                        label,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.tertiary,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    )
+                                    list.forEach { t ->
+                                        Text(
+                                            "· ${t.title}（${fmtMinutes(t.minutes)}${if (t.isBottomLine) " · 底线" else ""}）",
+                                            fontSize = 12.5.sp,
+                                        )
+                                    }
+                                }
+                            }
+                        Spacer(Modifier.size(10.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                        Spacer(Modifier.size(10.dp))
                         StageCheckinGrid(stage, today, checkins)
                     }
                 }
             }
         }
+    }
+
+    val editing = editingTasks
+    if (editing != null) {
+        StageTasksEditor(
+            stage = editing,
+            onDismiss = { editingTasks = null },
+            onConfirm = { wd, sat, sun ->
+                onSaveStageTasks(editing.id, wd, sat, sun)
+                editingTasks = null
+            },
+        )
     }
 }
 
@@ -303,4 +358,73 @@ private fun stageStrategy(stage: Stage): String = when {
     stage.name.contains("复试") ->
         "复试期策略：初试只是入场券，笔试与面试素材两手抓，出分前就该启动。"
     else -> "按阶段目标推进；真正拉开差距的是假期，学期只是「不停机」。"
+}
+
+/** 阶段页就地编辑每日任务：三组任务列表增删改，保存后由 onSaveStageTasks 写回计划配置 */
+@Composable
+private fun StageTasksEditor(stage: Stage, onDismiss: () -> Unit, onConfirm: (List<TaskEdit>, List<TaskEdit>, List<TaskEdit>) -> Unit) {
+    val weekday = remember { mutableStateListOf<TaskEdit>().apply { stage.weekdayTasks.forEach { add(it.toTaskEdit()) } } }
+    val saturday = remember { mutableStateListOf<TaskEdit>().apply { stage.saturdayTasks.forEach { add(it.toTaskEdit()) } } }
+    val sunday = remember { mutableStateListOf<TaskEdit>().apply { stage.sundayTasks.forEach { add(it.toTaskEdit()) } } }
+    var pick by remember { mutableStateOf<Pair<Int, Int>?>(null) } // (组, 下标)；-1 = 新增
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("编辑每日任务 · ${stage.name}") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    "点任务改标题 / 时长 / 底线；保存后立即生效（写入你的计划，影响打卡与奖励判定）",
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TaskGroupUI("周一至五", weekday, { pick = 0 to it }, { weekday.removeAt(it) }, { pick = 0 to -1 })
+                TaskGroupUI("周六", saturday, { pick = 1 to it }, { saturday.removeAt(it) }, { pick = 1 to -1 })
+                TaskGroupUI("周日", sunday, { pick = 2 to it }, { sunday.removeAt(it) }, { pick = 2 to -1 })
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(weekday.toList(), saturday.toList(), sunday.toList()) }) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+
+    val p = pick
+    if (p != null) {
+        val list = when (p.first) { 0 -> weekday; 1 -> saturday; else -> sunday }
+        TaskEditDialog(
+            initial = if (p.second >= 0) list[p.second] else null,
+            onDismiss = { pick = null },
+        ) { t ->
+            if (p.second >= 0) list[p.second] = t else list.add(t)
+            pick = null
+        }
+    }
+}
+
+@Composable
+private fun TaskGroupUI(label: String, tasks: SnapshotStateList<TaskEdit>, onEdit: (Int) -> Unit, onDelete: (Int) -> Unit, onAdd: () -> Unit) {
+    Text(
+        label,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.tertiary,
+        modifier = Modifier.padding(top = 6.dp),
+    )
+    tasks.forEachIndexed { i, t ->
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.weight(1f).clickable { onEdit(i) }) {
+                Text(t.title, fontSize = 13.sp)
+                Text(
+                    fmtMinutes(t.minutes) +
+                        (if (t.bottomLine) " · 底线" else "") +
+                        (if (t.maxMinutes > 0) "（可调）" else ""),
+                    fontSize = 10.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = { onDelete(i) }) { Text("删", fontSize = 12.sp) }
+        }
+    }
+    TextButton(onClick = onAdd) { Text("+ 添加任务", fontSize = 12.sp) }
 }

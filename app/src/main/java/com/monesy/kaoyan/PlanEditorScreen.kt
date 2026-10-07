@@ -73,6 +73,8 @@ data class NodeEdit(
 
 private fun PlanTask.toEdit() = TaskEdit(id, title, minutes, minMinutes, maxMinutes, isBottomLine)
 
+internal fun PlanTask.toTaskEdit() = TaskEdit(id, title, minutes, minMinutes, maxMinutes, isBottomLine)
+
 private fun Stage.toEdit() = StageEdit(
     id, name, start, end, hoursPerWeek, goal, coreTasks, acceptance, isDecisive,
     weekdayTasks.map { it.toEdit() }, saturdayTasks.map { it.toEdit() }, sundayTasks.map { it.toEdit() },
@@ -375,7 +377,7 @@ private fun TaskGroupEditor(
 // ---------- 任务编辑 ----------
 
 @Composable
-private fun TaskEditDialog(initial: TaskEdit?, onDismiss: () -> Unit, onConfirm: (TaskEdit) -> Unit) {
+internal fun TaskEditDialog(initial: TaskEdit?, onDismiss: () -> Unit, onConfirm: (TaskEdit) -> Unit) {
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var minutes by remember { mutableStateOf((initial?.minutes ?: 30).toString()) }
     var adjustable by remember { mutableStateOf((initial?.maxMinutes ?: 0) > 0) }

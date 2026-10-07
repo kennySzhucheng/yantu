@@ -44,12 +44,13 @@ import androidx.compose.ui.unit.sp
 import java.time.DayOfWeek
 import java.time.LocalDate
 
-/** Excel 课表导入预览页：解析结果逐条确认，可编辑/删除/手动补录，确认后写入用户配置 */
+/** 课表导入预览页：解析结果逐条确认，可编辑/删除/手动补录，未识别内容可一键补录，确认后写入用户配置 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImportPreviewScreen(
     initialCourses: List<TimetableParser.Course>,
     parseError: String?,
+    unparsed: List<TimetableParser.UnparsedCell> = emptyList(),
     onBack: () -> Unit,
     onConfirm: (semesterStart: LocalDate, courses: List<TimetableParser.Course>) -> Unit,
 ) {
@@ -60,6 +61,8 @@ fun ImportPreviewScreen(
     var showStartPicker by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<TimetableParser.Course?>(null) }
     var adding by remember { mutableStateOf(false) }
+    val unparsedList = remember { mutableStateListOf<TimetableParser.UnparsedCell>().apply { addAll(unparsed) } }
+    var prefill by remember { mutableStateOf<Pair<Int, TimetableParser.Course>?>(null) }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -91,6 +94,16 @@ fun ImportPreviewScreen(
             fontSize = 12.5.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        val unlocatedCount = courses.count { it.day == 0 }
+        if (unlocatedCount > 0) {
+            Text(
+                "⚠️ 有 $unlocatedCount 门未定位课程（缺星期信息）：点开条目选择星期后才会被保存",
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
         Spacer(Modifier.height(6.dp))
 
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -99,7 +112,12 @@ fun ImportPreviewScreen(
                     Row(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = c.checked, onCheckedChange = { c.checked = it })
                         Column(Modifier.weight(1f)) {
-                            Text("${dayName(c.day)} ${Timetable.slotLabels.getOrElse(c.slot) { "?" }}", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                            Text(
+                                "${dayName(c.day)} ${Timetable.slotLabels.getOrElse(c.slot) { "?" }}",
+                                fontSize = 12.sp,
+                                fontWeight = if (c.day == 0) FontWeight.Bold else FontWeight.Normal,
+                                color = if (c.day == 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            )
                             Text(c.name, fontSize = 14.5.sp, fontWeight = FontWeight.Medium)
                             Text(
                                 listOfNotNull(
@@ -112,6 +130,45 @@ fun ImportPreviewScreen(
                         }
                         IconButton(onClick = { courses.removeAt(i) }) {
                             Icon(Icons.Default.Close, contentDescription = "删除", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            if (unparsedList.isNotEmpty()) {
+                item {
+                    Text(
+                        "以下 ${unparsedList.size} 段内容未能自动识别——点条目补录成课程，用不到就忽略（不会导入）",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                itemsIndexed(unparsedList) { i, u ->
+                    Card(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                prefill = i to TimetableParser.Course(
+                                    day = u.day, slot = u.slot,
+                                    name = u.text.lineSequence().firstOrNull()?.take(40) ?: u.text.take(40),
+                                    room = "", weeks = "1-25",
+                                )
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ),
+                    ) {
+                        Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "${dayName(u.day)} ${Timetable.slotLabels.getOrElse(u.slot) { "?" }} · 点此补录",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(u.text.replace("\n", " ").take(80), fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -163,6 +220,17 @@ fun ImportPreviewScreen(
             initial = null,
             onDismiss = { adding = false },
             onConfirm = { courses.add(it.copy(checked = true)); adding = false },
+        )
+    }
+    prefill?.let { (idx, preCourse) ->
+        CourseEditDialog(
+            initial = preCourse,
+            onDismiss = { prefill = null },
+            onConfirm = { updated ->
+                courses.add(updated.copy(checked = true))
+                if (idx in unparsedList.indices) unparsedList.removeAt(idx)
+                prefill = null
+            },
         )
     }
 }

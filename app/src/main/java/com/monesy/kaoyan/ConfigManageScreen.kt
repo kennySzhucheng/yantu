@@ -107,8 +107,8 @@ fun ConfigManageScreen(
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("课表", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("查看/编辑课程，或从教务系统导出的 Excel 导入", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedButton(onClick = onOpenTimetable) { Text("课表管理（含 Excel 导入）") }
+                Text("查看/编辑课程；支持 Excel / 剪贴板 / 图片三种导入方式", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedButton(onClick = onOpenTimetable) { Text("课表管理") }
             }
         }
 

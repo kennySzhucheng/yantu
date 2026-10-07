@@ -43,13 +43,14 @@ import androidx.compose.ui.unit.sp
 import java.time.DayOfWeek
 import java.time.LocalDate
 
-/** 课表管理：查看/增删改课程 + 学期起始日 + Excel/图片导入入口；保存后写用户配置层并重载 */
+/** 课表管理：查看/增删改课程 + 学期起始日 + Excel/剪贴板/图片导入入口；保存后写用户配置层并重载 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimetableManageScreen(
     onBack: () -> Unit,
     onImportExcel: () -> Unit,
     onImportImage: () -> Unit,
+    onImportClipboard: () -> Unit,
     onSave: (semesterStart: LocalDate, courses: List<TimetableParser.Course>) -> Unit,
 ) {
     val courses = remember {
@@ -72,6 +73,7 @@ fun TimetableManageScreen(
     var editing by remember { mutableStateOf<TimetableParser.Course?>(null) }
     var adding by remember { mutableStateOf(false) }
     var showImageTip by remember { mutableStateOf(false) }
+    var showClipboardTip by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -111,12 +113,20 @@ fun TimetableManageScreen(
             }
         }
 
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = onImportExcel, modifier = Modifier.weight(1f)) { Text("从 Excel 导入") }
-            OutlinedButton(onClick = { showImageTip = true }, modifier = Modifier.weight(1f)) { Text("从图片识别") }
+        Text(
+            "导入方式",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(onClick = onImportExcel, modifier = Modifier.weight(1f)) { Text("Excel", fontSize = 13.sp, maxLines = 1) }
+            OutlinedButton(onClick = { showClipboardTip = true }, modifier = Modifier.weight(1f)) { Text("剪贴板", fontSize = 13.sp, maxLines = 1) }
+            OutlinedButton(onClick = { showImageTip = true }, modifier = Modifier.weight(1f)) { Text("图片", fontSize = 13.sp, maxLines = 1) }
         }
         Text(
-            "导入建议用学校原始课表（教务系统或课表 App）的完整清晰截图；Excel 优先，识别结果在预览页逐条核对",
+            "推荐「剪贴板」：浏览器打开课表页，长按表格 → 全选 → 复制，最准；Excel 适合教务能导出的场景；图片适合小程序 / 截图。结果都在预览页逐条核对",
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
@@ -131,6 +141,30 @@ fun TimetableManageScreen(
         }
     }
 
+    if (showClipboardTip) {
+        AlertDialog(
+            onDismissRequest = { showClipboardTip = false },
+            title = { Text("从剪贴板导入课表") },
+            text = {
+                Text(
+                    "最准的导入方式（推荐），三步：\n\n" +
+                        "① 手机浏览器登录教务系统，打开能看见整张课表的页面\n" +
+                        "② 手指按住课表表格里的文字不放，弹出菜单里点「全选」\n" +
+                        "③ 点「复制」\n\n" +
+                        "⚠️ 复制的是屏幕上那张课表表格，不是网页地址。\n" +
+                        "不确定复制对没有？先粘贴到微信输入框看一眼：出现课名、教室等课表文字就对了。",
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showClipboardTip = false; onImportClipboard() }) { Text("读取剪贴板") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClipboardTip = false }) { Text("取消") }
+            },
+        )
+    }
     if (showImageTip) {
         AlertDialog(
             onDismissRequest = { showImageTip = false },

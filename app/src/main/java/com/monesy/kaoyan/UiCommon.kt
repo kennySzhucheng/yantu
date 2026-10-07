@@ -35,7 +35,7 @@ fun pickerMillisToDate(millis: Long): LocalDate =
 
 val weekDayNames = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
-fun dayName(day: Int): String = weekDayNames.getOrElse(day - 1) { "?$day" }
+fun dayName(day: Int): String = if (day == 0) "未定位" else weekDayNames.getOrElse(day - 1) { "?$day" }
 
 fun dateText(d: LocalDate): String = "${d.monthValue}月${d.dayOfMonth}日"
 

@@ -23,3 +23,13 @@ tools/push_via_api.py
 
 # 本地构建工具（gradle 发行版）
 .tools/
+
+# 本地调试/验证脚本与 OCR 数据（可能含个人数据：微信路径、课表学号等，不公开）
+tools/analyze_*.py
+tools/ocr_*.py
+tools/verify_*.py
+tools/test_*.py
+tools/cqust_lines.json
+
+# 推广素材（本地宣传用，不公开）
+promo/

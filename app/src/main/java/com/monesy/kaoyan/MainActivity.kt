@@ -177,10 +177,12 @@ fun AppRoot() {
     val store = remember { Store(context) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-    // 首次启动向导：未完成引导则只显示向导；首次完成后自动进入使用教程，重跑不弹
+    // 引导分两套：全新用户（向导完成）看完整教程；升级用户（有数据、教程版本旧）只看「更新内容」速览
     val onboardedInitial = remember { runBlocking { store.onboarded.first() } }
     val onboarded by store.onboarded.collectAsState(initial = onboardedInitial)
+    val tutVerInitial = remember { runBlocking { store.tutorialVersion.first() } }
     var showTutorial by remember { mutableStateOf(false) }
+    var showWhatsNew by remember { mutableStateOf(onboardedInitial && tutVerInitial < TUTORIAL_VERSION) }
     var wizardRerun by remember { mutableStateOf(false) }
     if (!onboarded) {
         OnboardingScreen(store = store, isRerun = wizardRerun) {
@@ -192,8 +194,18 @@ fun AppRoot() {
         }
         return
     }
+    if (showWhatsNew) {
+        WhatsNewScreen(onDone = {
+            showWhatsNew = false
+            scope.launch { store.setTutorialVersion(TUTORIAL_VERSION) }
+        })
+        return
+    }
     if (showTutorial) {
-        TutorialScreen(onDone = { showTutorial = false })
+        TutorialScreen(onDone = {
+            showTutorial = false
+            scope.launch { store.setTutorialVersion(TUTORIAL_VERSION) }
+        })
         return
     }
 
@@ -201,6 +213,7 @@ fun AppRoot() {
     var subScreen by remember { mutableStateOf<String?>(null) }
     var parsedCourses by remember { mutableStateOf<List<TimetableParser.Course>>(emptyList()) }
     var parseError by remember { mutableStateOf<String?>(null) }
+    var parseUnparsed by remember { mutableStateOf<List<TimetableParser.UnparsedCell>>(emptyList()) }
     var ocrBusy by remember { mutableStateOf(false) }
 
     // 子页面支持系统返回键逐级返回，而不是直接退出应用
@@ -230,6 +243,7 @@ fun AppRoot() {
                 }
                 parsedCourses = result.courses
                 parseError = result.error
+                parseUnparsed = result.unparsed
                 subScreen = "importPreview"
             }
         }
@@ -248,6 +262,7 @@ fun AppRoot() {
                 ocrBusy = false
                 parsedCourses = result.courses
                 parseError = result.error
+                parseUnparsed = result.unparsed
                 subScreen = "importPreview"
             }
         }
@@ -467,6 +482,21 @@ fun AppRoot() {
                         )
                     },
                     onImportImage = { imagePicker.launch(arrayOf("image/*")) },
+                    onImportClipboard = {
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) {
+                                runCatching {
+                                    ClipboardImporter.readCourses(context)
+                                }.getOrElse { e ->
+                                    TimetableParser.Result(mutableListOf(), "导入失败：${e.message ?: "未知错误"}")
+                                }
+                            }
+                            parsedCourses = result.courses
+                            parseError = result.error
+                            parseUnparsed = result.unparsed
+                            subScreen = "importPreview"
+                        }
+                    },
                     onSave = { start, list ->
                         scope.launch {
                             UserConfig.putSection(store, UserConfig.SECTION_TIMETABLE, buildTimetableJson(start, list))
@@ -477,6 +507,7 @@ fun AppRoot() {
                 "importPreview" -> ImportPreviewScreen(
                     initialCourses = parsedCourses,
                     parseError = parseError,
+                    unparsed = parseUnparsed,
                     onBack = { subScreen = "timetable" },
                     onConfirm = { start, list ->
                         scope.launch {
@@ -496,7 +527,8 @@ fun AppRoot() {
                         }
                     },
                 )
-                "tutorial" -> TutorialScreen(onDone = { subScreen = null })
+                "tutorial" -> TutorialScreen(onDone = { subScreen = null; scope.launch { store.setTutorialVersion(TUTORIAL_VERSION) } })
+                "whatsnew" -> WhatsNewScreen(onDone = { subScreen = null; scope.launch { store.setTutorialVersion(TUTORIAL_VERSION) } })
                 "faq" -> FaqScreen(onBack = { subScreen = null })
                 else -> when (tab) {
                 0 -> TodayScreen(
@@ -528,7 +560,48 @@ fun AppRoot() {
                     rewardJournal = rewardJournal,
                     onRequestCalendar = { calendarLauncher.launch(Manifest.permission.READ_CALENDAR) },
                 )
-                2 -> StagesScreen(today = today, store = store)
+                2 -> StagesScreen(today = today, store = store, onSaveStageTasks = { stageId, wd, sat, sun ->
+                    scope.launch {
+                        // 写回用户计划层；当前若还在用内置示例计划，先把内置内容落到用户层再改
+                        val plan = UserConfig.readSection(store, UserConfig.SECTION_PLAN)
+                            ?: org.json.JSONObject(
+                                context.assets.open("config/plan.json").bufferedReader().use { it.readText() }
+                            )
+                        val arr = plan.optJSONArray("stages")
+                        if (arr != null) {
+                            fun tasksJson(list: List<TaskEdit>): org.json.JSONArray {
+                                val a = org.json.JSONArray()
+                                list.forEach { t ->
+                                    a.put(
+                                        org.json.JSONObject()
+                                            .put("id", t.id)
+                                            .put("title", t.title)
+                                            .put("minutes", t.minutes)
+                                            .apply {
+                                                if (t.minMinutes > 0 && t.maxMinutes > 0) {
+                                                    put("minMinutes", t.minMinutes)
+                                                    put("maxMinutes", t.maxMinutes)
+                                                }
+                                                if (t.bottomLine) put("bottomLine", true)
+                                            },
+                                    )
+                                }
+                                return a
+                            }
+                            for (i in 0 until arr.length()) {
+                                val o = arr.optJSONObject(i) ?: continue
+                                if (o.optInt("id") == stageId) {
+                                    o.put("weekdayTasks", tasksJson(wd))
+                                    o.put("saturdayTasks", tasksJson(sat))
+                                    o.put("sundayTasks", tasksJson(sun))
+                                }
+                            }
+                            UserConfig.putSection(store, UserConfig.SECTION_PLAN, plan)
+                            ConfigLoader.load(context)
+                            (context as? android.app.Activity)?.recreate()
+                        }
+                    }
+                })
                 else -> SettingsScreen(
                     store = store, settings = settings,
                     themeMode = themeMode,
@@ -539,6 +612,7 @@ fun AppRoot() {
                     onDarkEndChange = { t -> scope.launch { store.setThemeDarkEnd(t) } },
                     onOpenConfig = { subScreen = "config" },
                     onOpenTutorial = { subScreen = "tutorial" },
+                    onOpenWhatsNew = { subScreen = "whatsnew" },
                     onOpenFaq = { subScreen = "faq" },
                 )
             }

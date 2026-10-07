@@ -9,6 +9,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -58,7 +60,7 @@ import java.time.LocalTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     store: Store,
@@ -71,6 +73,7 @@ fun SettingsScreen(
     onDarkEndChange: (String) -> Unit,
     onOpenConfig: () -> Unit,
     onOpenTutorial: () -> Unit = {},
+    onOpenWhatsNew: () -> Unit = {},
     onOpenFaq: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -240,7 +243,7 @@ fun SettingsScreen(
                 Column(Modifier.weight(1f)) {
                     Text("初试日期（预计）", fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     Text(
-                        "${settings.examDate.year}年${settings.examDate.monthValue}月${settings.examDate.dayOfMonth}日 · 官方目录 2027年9月公布后如有变动请在此修改",
+                        "${Config.examDate.year}年${Config.examDate.monthValue}月${Config.examDate.dayOfMonth}日 · 官方目录公布后如有变动请在此修改（与计划、倒计时同步）",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -271,8 +274,12 @@ fun SettingsScreen(
                     fontSize = 12.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     Button(onClick = onOpenTutorial) { Text("使用教程") }
+                    OutlinedButton(onClick = onOpenWhatsNew) { Text("更新内容") }
                     OutlinedButton(onClick = onOpenFaq) { Text("常见问题") }
                 }
             }
@@ -286,7 +293,7 @@ fun SettingsScreen(
                 Text(Config.aboutSubjects, fontSize = 13.sp)
                 Text(Config.aboutTarget, fontSize = 13.sp)
                 Text(Config.aboutSource, fontSize = 13.sp)
-                Text("${Config.appTitle} v1.4.0 · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${Config.appTitle} v1.5.0 · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
                     TextButton(onClick = {
                         runCatching {
@@ -394,7 +401,7 @@ fun SettingsScreen(
     }
     if (showDatePicker) {
         val st = rememberDatePickerState(
-            initialSelectedDateMillis = settings.examDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+            initialSelectedDateMillis = Config.examDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
         )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -402,7 +409,15 @@ fun SettingsScreen(
                 TextButton(onClick = {
                     st.selectedDateMillis?.let { millis ->
                         val d = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
-                        change { store.setExamDate(d) }
+                        // 初试日期单一真源：写用户配置层并重载，倒计时/计划/节点提醒全部同步
+                        scope.launch {
+                            val app = UserConfig.readSection(store, UserConfig.SECTION_APP) ?: org.json.JSONObject()
+                            app.put("examDate", d.toString())
+                            UserConfig.putSection(store, UserConfig.SECTION_APP, app)
+                            ConfigLoader.load(context)
+                            Notify.scheduleNodeReminders(context)
+                            (context as? android.app.Activity)?.recreate()
+                        }
                     }
                     showDatePicker = false
                 }) { Text("确定") }
