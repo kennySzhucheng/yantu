@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DatePicker
@@ -42,12 +43,13 @@ import androidx.compose.ui.unit.sp
 import java.time.DayOfWeek
 import java.time.LocalDate
 
-/** 课表管理：查看/增删改课程 + 学期起始日 + Excel 导入入口；保存后写用户配置层并重载 */
+/** 课表管理：查看/增删改课程 + 学期起始日 + Excel/图片导入入口；保存后写用户配置层并重载 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimetableManageScreen(
     onBack: () -> Unit,
     onImportExcel: () -> Unit,
+    onImportImage: () -> Unit,
     onSave: (semesterStart: LocalDate, courses: List<TimetableParser.Course>) -> Unit,
 ) {
     val courses = remember {
@@ -69,6 +71,7 @@ fun TimetableManageScreen(
     var showStartPicker by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<TimetableParser.Course?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var showImageTip by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -110,6 +113,15 @@ fun TimetableManageScreen(
 
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = onImportExcel, modifier = Modifier.weight(1f)) { Text("从 Excel 导入") }
+            OutlinedButton(onClick = { showImageTip = true }, modifier = Modifier.weight(1f)) { Text("从图片识别") }
+        }
+        Text(
+            "导入建议用学校原始课表（教务系统或课表 App）的完整清晰截图；Excel 优先，识别结果在预览页逐条核对",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = { adding = true }, modifier = Modifier.weight(1f)) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(Modifier.width(4.dp))
@@ -119,6 +131,29 @@ fun TimetableManageScreen(
         }
     }
 
+    if (showImageTip) {
+        AlertDialog(
+            onDismissRequest = { showImageTip = false },
+            title = { Text("导入图片课表") },
+            text = {
+                Text(
+                    "请使用学校原始课表的完整截图，识别效果最好：\n" +
+                        "· 教务系统 / 课表小程序 / 课表 App 的正屏截图（含星期表头和节次列）\n" +
+                        "· 清晰、不拍照、不斜截、不要只截一半\n" +
+                        "· 截图里没有周次信息的课程会默认按全学期导入\n\n" +
+                        "识别在手机本地完成，图片不会上传。导入后请在预览页逐条核对修改。",
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showImageTip = false; onImportImage() }) { Text("选择图片") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImageTip = false }) { Text("取消") }
+            },
+        )
+    }
     if (showStartPicker) {
         val st = rememberDatePickerState(initialSelectedDateMillis = semesterStart.toPickerMillis())
         DatePickerDialog(

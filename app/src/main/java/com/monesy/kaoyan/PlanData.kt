@@ -47,6 +47,8 @@ data class KeyNode(
     val title: String,
     val detail: String,
     val kind: NodeKind,
+    /** 软节点：具体时间由外部决定（如复试，各校不同），只做范围提醒，不显示硬倒计时 */
+    val soft: Boolean = false,
 ) {
     /** 稳定唯一 ID，用于节点完成打卡的存储键 */
     val id: String get() = "node_${date.toEpochDay()}_$title"
@@ -102,7 +104,7 @@ object Plan {
             val o = nodesArr.optJSONObject(i) ?: return@mapNotNull null
             val date = parseDate(o.optString("date")) ?: return@mapNotNull null
             val kind = runCatching { NodeKind.valueOf(o.optString("kind", "INFO")) }.getOrDefault(NodeKind.INFO)
-            KeyNode(date, o.optString("title"), o.optString("detail"), kind)
+            KeyNode(date, o.optString("title"), o.optString("detail"), kind, o.optBoolean("soft", false))
         }
     }
 
@@ -154,7 +156,7 @@ object Plan {
             .map { it to ChronoUnit.DAYS.between(today, it.date) }
 
     fun nearestNodeLine(today: LocalDate): String? =
-        upcomingNodes(today).firstOrNull()?.let { (node, days) ->
+        upcomingNodes(today).firstOrNull { !it.first.soft }?.let { (node, days) ->
             when {
                 days == 0L -> "今天：「${node.title}」"
                 else -> "距「${node.title}」还有 $days 天"

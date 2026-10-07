@@ -28,30 +28,57 @@ object PlanTemplate {
         val mt = PlanPresets.mathTeachers.firstOrNull { it.name == o.mathTeacher }
             ?: PlanPresets.mathTeachers.first()
 
-        // 按剩余时长比例分配阶段（不再用固定天数）：基础≈40% / 强化≈30% / 真题≈18% / 冲刺≈12%，
-        // 各档有下限（冲刺≥4周、真题≥6周、强化≥8周）；总时长不足时按 冲刺>真题>强化 优先级压缩，
-        // 基础期吃剩余——无论 18 个月还是 6 个月开始，拿到的节奏都成比例。
+        // 按剩余时长分配阶段。从零开始：基础≈40% / 强化≈30% / 真题≈18% / 冲刺≈12%，
+        // 各档有下限（冲刺≥4周、真题≥6周、强化≥8周）；总时长不足时按 冲刺>真题>强化 优先级压缩。
+        // 中途/后期开始（startFrom>0）：丢弃之前的阶段，剩余时间按比例重分、不设下限——
+        // 真题期起 = 真题60/冲刺40；强化期起 = 强化55/真题27/冲刺18；冲刺起 = 全部给冲刺。
+        val startIdx = o.startFrom.coerceIn(0, 3)
         val total = ChronoUnit.DAYS.between(planStart, examDate).coerceAtLeast(0)
-        var sprintLen = (total * 0.12).toLong().coerceIn(28, 42)
-        var realLen = (total * 0.18).toLong().coerceIn(42, 70)
-        var strongLen = (total * 0.30).toLong().coerceIn(56, 112)
-        if (sprintLen + realLen + strongLen > total) {
-            sprintLen = minOf(sprintLen, total)
-            realLen = minOf(realLen, (total - sprintLen).coerceAtLeast(0))
-            strongLen = minOf(strongLen, (total - sprintLen - realLen).coerceAtLeast(0))
-        }
-        val baseLen = (total - sprintLen - realLen - strongLen).coerceAtLeast(0)
+        val stageCount = 4 - startIdx
+        val starts = ArrayList<LocalDate>(stageCount)
+        val ends = ArrayList<LocalDate>(stageCount)
+        if (startIdx == 0) {
+            var sprintLen = (total * 0.12).toLong().coerceIn(28, 42)
+            var realLen = (total * 0.18).toLong().coerceIn(42, 70)
+            var strongLen = (total * 0.30).toLong().coerceIn(56, 112)
+            if (sprintLen + realLen + strongLen > total) {
+                sprintLen = minOf(sprintLen, total)
+                realLen = minOf(realLen, (total - sprintLen).coerceAtLeast(0))
+                strongLen = minOf(strongLen, (total - sprintLen - realLen).coerceAtLeast(0))
+            }
+            val baseLen = (total - sprintLen - realLen - strongLen).coerceAtLeast(0)
 
-        val strongStart = planStart.plusDays(baseLen)
-        val realStart = strongStart.plusDays(strongLen)
-        val sprintStart = realStart.plusDays(realLen)
-        val starts = listOf(planStart, strongStart, realStart, sprintStart)
-        val ends = listOf(
-            strongStart.minusDays(1),
-            realStart.minusDays(1),
-            sprintStart.minusDays(1),
-            examDate.minusDays(1),
-        )
+            val strongStart = planStart.plusDays(baseLen)
+            val realStart = strongStart.plusDays(strongLen)
+            val sprintStart = realStart.plusDays(realLen)
+            starts.addAll(listOf(planStart, strongStart, realStart, sprintStart))
+            ends.addAll(
+                listOf(
+                    strongStart.minusDays(1),
+                    realStart.minusDays(1),
+                    sprintStart.minusDays(1),
+                    examDate.minusDays(1),
+                )
+            )
+        } else {
+            val weights = when (startIdx) {
+                1 -> doubleArrayOf(0.55, 0.27, 0.18)
+                2 -> doubleArrayOf(0.60, 0.40)
+                else -> doubleArrayOf(1.0)
+            }
+            var cursor = planStart
+            for (k in 0 until stageCount) {
+                val last = k == stageCount - 1
+                val len = if (last) {
+                    ChronoUnit.DAYS.between(cursor, examDate).coerceAtLeast(1)
+                } else {
+                    (total * weights[k]).toLong().coerceAtLeast(1)
+                }
+                starts.add(cursor)
+                ends.add(if (last) examDate.minusDays(1) else cursor.plusDays(len).minusDays(1))
+                cursor = cursor.plusDays(len)
+            }
+        }
 
         fun task(id: String, title: String, minutes: Int, lo: Int = 0, hi: Int = 0, bottom: Boolean = false): JSONObject =
             JSONObject().put("id", id).put("title", title).put("minutes", minutes).apply {
@@ -169,37 +196,41 @@ object PlanTemplate {
         )
         val taskSets = listOf(baseTasks, strongTasks, realTasks, sprintTasks)
 
-        // 进度起点：基础全完成（或无此科）→ 跳过基础期
+        // 进度起点：基础全完成（或无此科）→ 跳过基础期（仅对从零开始的计划生效）
         val baseDone = (!hasMath || o.mathBaseDone) && (!hasEng || o.grammarDone) &&
             (!hasMajor || o.majorRound1Done)
-        val skipBase = baseDone
+        val skipBase = startIdx == 0 && baseDone
 
+        val keptDefs = defs.drop(startIdx)
+        val keptSets = taskSets.drop(startIdx)
         val stages = JSONArray()
         var stageId = 1
-        defs.forEachIndexed { i, def ->
-            if (i == 0 && skipBase) return@forEachIndexed
-            if (ends[i] < starts[i]) return@forEachIndexed
+        keptDefs.forEachIndexed { k, def ->
+            val s = starts.getOrNull(k)
+            val e = ends.getOrNull(k)
+            if (s == null || e == null) return@forEachIndexed
+            if (e < s) return@forEachIndexed
             val satTasks = buildList {
                 add(words())
-                add(task("g_${i}_sat_am", "上午：主科推进", 120, 60, 180))
-                add(task("g_${i}_sat_pm", "下午：英语 / 专业课", 120, 60, 150))
+                add(task("g_${k}_sat_am", "上午：主科推进", 120, 60, 180))
+                add(task("g_${k}_sat_pm", "下午：英语 / 专业课", 120, 60, 150))
             }
             val sunTasks = buildList {
                 add(words())
-                add(task("g_${i}_sun_am", "上午：主科推进", 120, 60, 180))
+                add(task("g_${k}_sun_am", "上午：主科推进", 120, 60, 180))
             }
             stages.put(
                 JSONObject()
                     .put("id", stageId++)
                     .put("name", def.name)
-                    .put("dateText", "${starts[i]} – ${ends[i]}")
-                    .put("start", starts[i].toString())
-                    .put("end", ends[i].toString())
+                    .put("dateText", "$s – $e")
+                    .put("start", s.toString())
+                    .put("end", e.toString())
                     .put("hoursPerWeek", def.hours)
                     .put("goal", def.goal)
                     .put("coreTasks", JSONArray(def.cores))
                     .put("acceptance", JSONArray(def.acceptance))
-                    .put("weekdayTasks", JSONArray(taskSets[i]))
+                    .put("weekdayTasks", JSONArray(keptSets[k]))
                     .put("saturdayTasks", JSONArray(satTasks))
                     .put("sundayTasks", JSONArray(sunTasks)),
             )
@@ -242,11 +273,12 @@ object PlanTemplate {
         )
 
         val nodes = JSONArray()
-        fun node(offset: Long, title: String, detail: String, kind: String) {
+        fun node(offset: Long, title: String, detail: String, kind: String, soft: Boolean = false) {
             nodes.put(
                 JSONObject()
                     .put("date", examDate.plusDays(offset).toString())
                     .put("title", title).put("detail", detail).put("kind", kind)
+                    .apply { if (soft) put("soft", true) }
             )
         }
         node(-100, "招生简章与专业目录公布", "核对考试科目与参考书是否变动", "INFO")
@@ -258,7 +290,10 @@ object PlanTemplate {
         node(-10, "打印准考证", "多打几份，核对考场信息；备齐证件文具", "INFO")
         node(0, "初试 · 第一天", "保持状态，正常发挥", "EXAM")
         node(1, "初试 · 第二天", "考完即放下，准备复试节奏", "EXAM")
-        node(102, "复试（预计）", "笔试 + 面试；提前了解目标导师", "EXAM")
+        // 复试时间由各校决定，作软节点只做范围提醒，不显示硬倒计时
+        node(60, "复试（时间以报考院校通知为准）",
+            "一般在初试次年 2月下旬–4月上旬，各校不同；出分后立刻准备笔试与面试，持续关注报考院校研究生院通知",
+            "EXAM", soft = true)
 
         return JSONObject().put("stages", stages).put("keyNodes", nodes)
     }
@@ -332,11 +367,13 @@ object PlanTemplate {
         planSource: String,
     ): JSONObject = JSONObject().apply {
         put("countdownLabel", "距 $examName 初试")
+        put("examName", examName)
         put("examDate", examDate.toString())
         put("planStart", planStart.toString())
         if (targetScore > 0) put("targetScore", targetScore)
         put("schoolFrom", schoolFrom.ifBlank { "我的本科" })
         if (schoolTo.isNotBlank()) put("schoolTo", schoolTo)
+        if (major.isNotBlank()) put("major", major)
         if (subjects.isNotBlank()) put("subjects", subjects)
         put("aboutGoal", "目标：${schoolTo.ifBlank { "待定院校" }} ${major}".trim())
         if (subjects.isNotBlank()) put("aboutSubjects", "科目：$subjects")

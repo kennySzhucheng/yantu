@@ -1,7 +1,9 @@
 package com.monesy.kaoyan
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,6 +27,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,6 +36,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalTime
@@ -65,6 +70,8 @@ fun SettingsScreen(
     onDarkStartChange: (String) -> Unit,
     onDarkEndChange: (String) -> Unit,
     onOpenConfig: () -> Unit,
+    onOpenTutorial: () -> Unit = {},
+    onOpenFaq: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -75,6 +82,8 @@ fun SettingsScreen(
     var showDarkStart by remember { mutableStateOf(false) }
     var showDarkEnd by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var nodeRemindOn by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) { nodeRemindOn = store.nodeRemindersEnabled.first() }
 
     var notifGranted by remember {
         mutableStateOf(
@@ -200,6 +209,28 @@ fun SettingsScreen(
                         Text("授予通知权限（必需）")
                     }
                 }
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.surfaceVariant)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("重大节点临近提醒", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            "报名、模考、初试等节点提前 7 天 / 3 天 / 当天上午 9 点推送",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = nodeRemindOn,
+                        onCheckedChange = { on ->
+                            nodeRemindOn = on
+                            scope.launch {
+                                store.setNodeRemindersEnabled(on)
+                                Notify.scheduleNodeReminders(context)
+                            }
+                        },
+                    )
+                }
             }
         }
 
@@ -231,6 +262,22 @@ fun SettingsScreen(
             }
         }
 
+        // ---- 帮助 ----
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("帮助", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "功能教程与常见问题，随时可以重看",
+                    fontSize = 12.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onOpenTutorial) { Text("使用教程") }
+                    OutlinedButton(onClick = onOpenFaq) { Text("常见问题") }
+                }
+            }
+        }
+
         // ---- 关于 ----
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -239,7 +286,25 @@ fun SettingsScreen(
                 Text(Config.aboutSubjects, fontSize = 13.sp)
                 Text(Config.aboutTarget, fontSize = 13.sp)
                 Text(Config.aboutSource, fontSize = 13.sp)
-                Text("${Config.appTitle} v1.0.1 · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${Config.appTitle} v1.4.0 · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
+                    TextButton(onClick = {
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Config.feedbackUrl)))
+                        }
+                    }) { Text("GitHub Issues") }
+                    TextButton(onClick = {
+                        // 优先拉起邮件客户端；没有则复制邮箱到剪贴板
+                        val ok = runCatching {
+                            context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${Config.feedbackEmail}")))
+                        }.isSuccess
+                        if (!ok) {
+                            val cm = context.getSystemService(android.content.ClipboardManager::class.java)
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("email", Config.feedbackEmail))
+                            android.widget.Toast.makeText(context, "已复制邮箱 ${Config.feedbackEmail}", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }) { Text("✉ 邮件反馈") }
+                }
             }
         }
 

@@ -16,6 +16,8 @@
   "aboutSource": "计划来源：《28考研完整备考时间表》缓步推进版",
   "rewardsDaily": ["奶茶一杯", "甜点一份", "追剧一集", "打一局游戏", "睡前刷手机半小时"],
   "rewardsWeekly": ["吃一顿大餐", "看一场电影", "打半天游戏", "睡到自然醒", "和朋友出去玩半天"],
+  "feedbackUrl": "https://github.com/kennySzhucheng/yantu/issues",
+  "feedbackEmail": "kennySli@163.com",
   "bells": [
     {"slot": 0, "start": "08:00", "end": "09:30"},
     {"slot": 1, "start": "10:05", "end": "11:40", "overrides": [

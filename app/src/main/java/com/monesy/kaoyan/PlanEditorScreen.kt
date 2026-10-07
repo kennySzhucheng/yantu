@@ -66,7 +66,10 @@ data class StageEdit(
     val weekday: List<TaskEdit>, val saturday: List<TaskEdit>, val sunday: List<TaskEdit>,
 )
 
-data class NodeEdit(val date: LocalDate, val title: String, val detail: String, val kind: NodeKind)
+data class NodeEdit(
+    val date: LocalDate, val title: String, val detail: String,
+    val kind: NodeKind, val soft: Boolean = false,
+)
 
 private fun PlanTask.toEdit() = TaskEdit(id, title, minutes, minMinutes, maxMinutes, isBottomLine)
 
@@ -75,7 +78,7 @@ private fun Stage.toEdit() = StageEdit(
     weekdayTasks.map { it.toEdit() }, saturdayTasks.map { it.toEdit() }, sundayTasks.map { it.toEdit() },
 )
 
-private fun KeyNode.toEdit() = NodeEdit(date, title, detail, kind)
+private fun KeyNode.toEdit() = NodeEdit(date, title, detail, kind, soft)
 
 private fun kindName(k: NodeKind) = when (k) {
     NodeKind.STUDY -> "学习"; NodeKind.INFO -> "信息"; NodeKind.EXAM -> "考试"
@@ -103,7 +106,11 @@ fun buildPlanJson(stages: List<StageEdit>, nodes: List<NodeEdit>): JSONObject {
     }
     val nArr = JSONArray()
     nodes.forEach { n ->
-        nArr.put(JSONObject().put("date", n.date.toString()).put("title", n.title).put("detail", n.detail).put("kind", n.kind.name))
+        nArr.put(
+            JSONObject().put("date", n.date.toString()).put("title", n.title).put("detail", n.detail)
+                .put("kind", n.kind.name)
+                .apply { if (n.soft) put("soft", true) }
+        )
     }
     return JSONObject().put("stages", sArr).put("keyNodes", nArr)
 }
@@ -166,7 +173,10 @@ fun PlanEditorScreen(onBack: () -> Unit, onSave: (JSONObject) -> Unit) {
                     Row(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(n.title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                            Text("${n.date} · ${kindName(n.kind)}", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "${n.date} · ${kindName(n.kind)}" + if (n.soft) " · 时间待定" else "",
+                                fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                         IconButton(onClick = { editingNode = i }) { Icon(Icons.Default.Edit, contentDescription = "编辑") }
                         IconButton(onClick = { nodes.removeAt(i) }) {
@@ -438,6 +448,7 @@ private fun NodeEditDialog(initial: NodeEdit?, onDismiss: () -> Unit, onConfirm:
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var detail by remember { mutableStateOf(initial?.detail ?: "") }
     var kind by remember { mutableStateOf(initial?.kind ?: NodeKind.INFO) }
+    var soft by remember { mutableStateOf(initial?.soft ?: false) }
     var showPicker by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -453,12 +464,23 @@ private fun NodeEditDialog(initial: NodeEdit?, onDismiss: () -> Unit, onConfirm:
                         FilterChip(selected = kind == k, onClick = { kind = k }, label = { Text(kindName(k), fontSize = 12.sp) })
                     }
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("时间待定", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            "适用于复试等由院校决定时间的节点：只做范围提醒，不显示硬倒计时",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = soft, onCheckedChange = { soft = it })
+                }
             }
         },
         confirmButton = {
             TextButton(
                 enabled = title.isNotBlank(),
-                onClick = { onConfirm(NodeEdit(date, title.trim(), detail.trim(), kind)) },
+                onClick = { onConfirm(NodeEdit(date, title.trim(), detail.trim(), kind, soft)) },
             ) { Text("确定") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },

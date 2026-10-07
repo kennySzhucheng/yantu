@@ -45,6 +45,7 @@ class Store(private val context: Context) {
     private val KEY_THEME = stringPreferencesKey("theme_mode")
     private val KEY_THEME_DARK_START = stringPreferencesKey("theme_dark_start")
     private val KEY_THEME_DARK_END = stringPreferencesKey("theme_dark_end")
+    private val KEY_NODE_REMIND = booleanPreferencesKey("node_reminders_enabled")
 
     // ---------- 外观（light / dark / scheduled + 定时时段） ----------
 
@@ -137,6 +138,13 @@ class Store(private val context: Context) {
 
     suspend fun setOnboarded(v: Boolean) =
         context.dataStore.edit { it[KEY_ONBOARDED] = v }
+
+    // ---------- 节点临近提醒开关 ----------
+
+    val nodeRemindersEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_NODE_REMIND] ?: true }
+
+    suspend fun setNodeRemindersEnabled(v: Boolean) =
+        context.dataStore.edit { it[KEY_NODE_REMIND] = v }
 
     // ---------- 任务时长覆盖（仅可调任务会写入） ----------
 
@@ -287,6 +295,36 @@ class Store(private val context: Context) {
         }
         return n
     }
+
+    // ---------- 底线通用统计（不绑定具体任务 id，自定义计划同样适用） ----------
+
+    /** 当天底线任务是否全部完成（当天没有底线任务返回 false） */
+    private fun bottomLineMet(day: LocalDate, all: Map<LocalDate, Set<String>>): Boolean {
+        val bottoms = Plan.tasksFor(Plan.stageFor(day), day.dayOfWeek).filter { it.isBottomLine }
+        if (bottoms.isEmpty()) return false
+        val ids = all[day] ?: emptySet()
+        return bottoms.all { it.id in ids }
+    }
+
+    /** 底线连续天数：今天还没完成不打断连续（从昨天往前数） */
+    suspend fun bottomLineStreak(today: LocalDate): Int {
+        val all = readAllCheckins()
+        var day = today
+        if (!bottomLineMet(day, all)) day = day.minusDays(1)
+        var n = 0
+        while (bottomLineMet(day, all)) {
+            n++
+            day = day.minusDays(1)
+        }
+        return n
+    }
+
+    /** 累计"底线任务全完成"天数 */
+    suspend fun bottomTotalDays(): Int =
+        readAllCheckins().count { (d, ids) ->
+            val bottoms = Plan.tasksFor(Plan.stageFor(d), d.dayOfWeek).filter { it.isBottomLine }
+            bottoms.isNotEmpty() && bottoms.all { it.id in ids }
+        }
 
     /** 累计背单词天数。 */
     suspend fun wordTotalDays(): Int {

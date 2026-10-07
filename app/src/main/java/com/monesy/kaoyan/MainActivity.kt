@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -176,11 +177,14 @@ fun AppRoot() {
     val store = remember { Store(context) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-    // 首次启动向导：未完成引导则只显示向导
+    // 首次启动向导：未完成引导则只显示向导；首次完成后自动进入使用教程，重跑不弹
     val onboardedInitial = remember { runBlocking { store.onboarded.first() } }
     val onboarded by store.onboarded.collectAsState(initial = onboardedInitial)
+    var showTutorial by remember { mutableStateOf(false) }
+    var wizardRerun by remember { mutableStateOf(false) }
     if (!onboarded) {
-        OnboardingScreen(store = store) {
+        OnboardingScreen(store = store, isRerun = wizardRerun) {
+            if (!wizardRerun) showTutorial = true
             scope.launch {
                 ConfigLoader.load(context)
                 store.setOnboarded(true)
@@ -188,11 +192,16 @@ fun AppRoot() {
         }
         return
     }
+    if (showTutorial) {
+        TutorialScreen(onDone = { showTutorial = false })
+        return
+    }
 
     // 子页面路由（配置管理 / 课表管理 / 导入预览）+ 文件选择器
     var subScreen by remember { mutableStateOf<String?>(null) }
     var parsedCourses by remember { mutableStateOf<List<TimetableParser.Course>>(emptyList()) }
     var parseError by remember { mutableStateOf<String?>(null) }
+    var ocrBusy by remember { mutableStateOf(false) }
 
     // 子页面支持系统返回键逐级返回，而不是直接退出应用
     BackHandler(enabled = subScreen != null) {
@@ -205,6 +214,7 @@ fun AppRoot() {
 
     fun reloadAfterConfigChange() {
         ConfigLoader.load(context)
+        scope.launch { Notify.scheduleNodeReminders(context) }
         (context as? android.app.Activity)?.recreate()
     }
 
@@ -218,6 +228,24 @@ fun AppRoot() {
                         TimetableParser.Result(mutableListOf(), "解析失败：${e.message ?: "未知错误"}")
                     }
                 }
+                parsedCourses = result.courses
+                parseError = result.error
+                subScreen = "importPreview"
+            }
+        }
+    }
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                ocrBusy = true
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        TimetableParser.parse(OcrReader.readGrid(context, uri))
+                    }.getOrElse { e ->
+                        TimetableParser.Result(mutableListOf(), "识别失败：${e.message ?: "未知错误"}")
+                    }
+                }
+                ocrBusy = false
                 parsedCourses = result.courses
                 parseError = result.error
                 subScreen = "importPreview"
@@ -351,8 +379,8 @@ fun AppRoot() {
     var totalDays by remember { mutableIntStateOf(0) }
     var weekSummary by remember { mutableStateOf<Stats.WeekSummary?>(null) }
     LaunchedEffect(checked) {
-        streak = store.wordStreak(today)
-        totalDays = store.wordTotalDays()
+        streak = store.bottomLineStreak(today)
+        totalDays = store.bottomTotalDays()
         weekSummary = Stats.weekSummary(store, today)
 
         // 双层奖励·日常：当天达标（底线任务 + 其余过半）记一条小奖励；跌破达标线同步撤回
@@ -399,7 +427,10 @@ fun AppRoot() {
                     onOpenTimetable = { subScreen = "timetable" },
                     onImportJson = { importPicker.launch(arrayOf("application/json", "*/*")) },
                     onExportJson = { exportPicker.launch("config.json") },
-                    onRerunWizard = { scope.launch { store.setOnboarded(false) } },
+                    onRerunWizard = {
+                        wizardRerun = true
+                        scope.launch { store.setOnboarded(false) }
+                    },
                     onUseExample = {
                         scope.launch {
                             UserConfig.removeSection(store, UserConfig.SECTION_PLAN)
@@ -435,6 +466,7 @@ fun AppRoot() {
                             )
                         )
                     },
+                    onImportImage = { imagePicker.launch(arrayOf("image/*")) },
                     onSave = { start, list ->
                         scope.launch {
                             UserConfig.putSection(store, UserConfig.SECTION_TIMETABLE, buildTimetableJson(start, list))
@@ -464,6 +496,8 @@ fun AppRoot() {
                         }
                     },
                 )
+                "tutorial" -> TutorialScreen(onDone = { subScreen = null })
+                "faq" -> FaqScreen(onBack = { subScreen = null })
                 else -> when (tab) {
                 0 -> TodayScreen(
                     today = today,
@@ -504,8 +538,18 @@ fun AppRoot() {
                     onDarkStartChange = { t -> scope.launch { store.setThemeDarkStart(t) } },
                     onDarkEndChange = { t -> scope.launch { store.setThemeDarkEnd(t) } },
                     onOpenConfig = { subScreen = "config" },
+                    onOpenTutorial = { subScreen = "tutorial" },
+                    onOpenFaq = { subScreen = "faq" },
                 )
             }
+            }
+            if (ocrBusy) {
+                AlertDialog(
+                    onDismissRequest = {},
+                    title = { Text("正在识别图片…") },
+                    text = { Text("离线识别课表文字并解析，一般几秒钟，请稍候。") },
+                    confirmButton = {},
+                )
             }
         }
     }

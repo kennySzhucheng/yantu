@@ -87,8 +87,13 @@ fun TodayScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        // ---- 倒计时 ----
-        val heroBg = if (LocalIsDark.current) Color(0xFF1E3A5C) else MaterialTheme.colorScheme.primary
+        // ---- 倒计时（≤100 天进入冲刺：蓝转红 + 冲刺徽章） ----
+        val heroBg = when {
+            days in 1..100 -> if (LocalIsDark.current) Color(0xFF7B241C) else Color(0xFFA93226)
+            LocalIsDark.current -> Color(0xFF1E3A5C)
+            else -> MaterialTheme.colorScheme.primary
+        }
+        val sprint = days in 1..100
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -97,7 +102,19 @@ fun TodayScreen(
             ),
         ) {
             Column(Modifier.padding(20.dp)) {
-                Text(Config.countdownLabel, fontSize = 14.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(Config.countdownLabel, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    if (sprint) {
+                        Surface(shape = RoundedCornerShape(6.dp), color = Color.White.copy(alpha = 0.22f)) {
+                            Text(
+                                "🔥 冲刺",
+                                Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                }
                 when {
                     days > 0 -> {
                         Row(verticalAlignment = Alignment.Bottom) {
@@ -134,9 +151,12 @@ fun TodayScreen(
             }
         }
 
-        // ---- 底线警告 ----
+        // ---- 底线警告（通用：当前阶段所有底线任务，不绑定具体科目） ----
+        val bottoms = tasks.filter { it.isBottomLine }
+        val bottomsDone = bottoms.isNotEmpty() && bottoms.all { it.id in checked }
         val now = remember { LocalTime.now() }
-        if ("words" !in checked && now >= LocalTime.of(21, 0) && days >= 0) {
+        if (!bottomsDone && now >= LocalTime.of(21, 0) && days >= 0) {
+            val pending = bottoms.firstOrNull { it.id !in checked }
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -145,7 +165,7 @@ fun TodayScreen(
                 ),
             ) {
                 Text(
-                    "⚠️ 底线要破了：今天的 40 个单词还没背！病假、考试周、过年都不破例。",
+                    "⚠️ 底线要破了：${pending?.title ?: "今日底线任务"}还没完成！病假、考试周、过年都不破例。",
                     Modifier.padding(14.dp),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
@@ -386,22 +406,22 @@ fun TodayScreen(
             }
         }
 
-        // ---- 连续打卡 ----
+        // ---- 连续打卡（底线连勤：当天所有底线任务全完成才算一天） ----
         Card(modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("🔥", fontSize = 30.sp)
                 Column(Modifier.padding(start = 12.dp)) {
                     Row {
                         Text(
-                            "连续背单词 $streak 天",
+                            "底线连续 $streak 天",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.secondary,
                         )
                     }
-                    Text("累计 $totalDays 天 · 断一周要花两周找回手感，不断卡比每天多久更重要", fontSize = 12.sp)
+                    Text("累计 $totalDays 天 · 底线全完成才算连续，不断卡比每天多久更重要", fontSize = 12.sp)
                     Spacer(Modifier.height(4.dp))
-                    val bottomLineDone = "words" in checked
+                    val bottomLineDone = bottoms.isNotEmpty() && bottoms.all { it.id in checked }
                     Text(
                         when {
                             bottomLineDone -> "今日底线：✅ 已完成"
@@ -492,7 +512,7 @@ fun TodayScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
-                        "按打卡任务时长估算 · 打卡 ${ws.checkedCount}/${ws.taskCount} 次 · 连续背单词 ${ws.wordStreak} 天",
+                        "按打卡任务时长估算 · 打卡 ${ws.checkedCount}/${ws.taskCount} 次 · 底线连续 ${ws.streak} 天",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 6.dp),

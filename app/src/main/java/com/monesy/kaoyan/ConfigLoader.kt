@@ -13,6 +13,7 @@ import java.time.LocalTime
 object Config {
     var appTitle: String = "学习提醒"
     var countdownLabel: String = "距考试初试"
+    var examName: String = ""
     var targetScore: Int = 0
     var planStart: LocalDate = LocalDate.of(2026, 1, 1)
     var examDate: LocalDate = LocalDate.of(2027, 12, 18)
@@ -21,6 +22,7 @@ object Config {
     var semesterWeeks: Int = 18
     var schoolFrom: String = ""
     var schoolTo: String = ""
+    var major: String = ""
     var subjects: String = ""
     var aboutGoal: String = ""
     var aboutSubjects: String = ""
@@ -28,6 +30,12 @@ object Config {
     var aboutSource: String = ""
     var rewardDaily: List<String> = listOf("奖励自己一下")
     var rewardWeekly: List<String> = listOf("好好犒劳自己一次")
+
+    /** 用户反馈入口（GitHub Issues），关于页可跳转 */
+    var feedbackUrl: String = "https://github.com/kennySzhucheng/yantu/issues"
+
+    /** 作者邮箱（反馈备选渠道；未装邮件客户端时点击会复制到剪贴板） */
+    var feedbackEmail: String = "kennySli@163.com"
 
     /** 非空表示配置加载失败，界面应提示用户检查 assets/config */
     var loadError: String? = null
@@ -44,6 +52,7 @@ object ConfigLoader {
             val app = UserConfig.merge(read(context, "config/app.json"), user.optJSONObject(UserConfig.SECTION_APP))
             Config.appTitle = app.optString("appTitle", Config.appTitle)
             Config.countdownLabel = app.optString("countdownLabel", Config.countdownLabel)
+            Config.examName = app.optString("examName", Config.examName)
             Config.targetScore = app.optInt("targetScore", Config.targetScore)
             Config.planStart = parseDate(app.optString("planStart")) ?: Config.planStart
             Config.examDate = parseDate(app.optString("examDate")) ?: Config.examDate
@@ -52,6 +61,7 @@ object ConfigLoader {
             Config.semesterWeeks = app.optInt("semesterWeeks", Config.semesterWeeks)
             Config.schoolFrom = app.optString("schoolFrom", Config.schoolFrom)
             Config.schoolTo = app.optString("schoolTo", Config.schoolTo)
+            Config.major = app.optString("major", Config.major)
             Config.subjects = app.optString("subjects", Config.subjects)
             Config.aboutGoal = app.optString("aboutGoal", Config.aboutGoal)
             Config.aboutSubjects = app.optString("aboutSubjects", Config.aboutSubjects)
@@ -59,6 +69,8 @@ object ConfigLoader {
             Config.aboutSource = app.optString("aboutSource", Config.aboutSource)
             Config.rewardDaily = readList(app.optJSONArray("rewardsDaily")).ifEmpty { Config.rewardDaily }
             Config.rewardWeekly = readList(app.optJSONArray("rewardsWeekly")).ifEmpty { Config.rewardWeekly }
+            Config.feedbackUrl = app.optString("feedbackUrl", Config.feedbackUrl)
+            Config.feedbackEmail = app.optString("feedbackEmail", Config.feedbackEmail)
 
             Plan.init(UserConfig.merge(read(context, "config/plan.json"), user.optJSONObject(UserConfig.SECTION_PLAN)))
             Timetable.init(UserConfig.merge(read(context, "config/timetable.json"), user.optJSONObject(UserConfig.SECTION_TIMETABLE)))

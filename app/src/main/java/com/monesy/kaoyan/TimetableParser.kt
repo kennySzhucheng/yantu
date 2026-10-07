@@ -26,16 +26,14 @@ object TimetableParser {
     private data class RawCourse(val name: String, val room: String, val weeks: String)
 
     fun parse(grid: List<List<String>>): Result {
-        // 1. 找表头行：一行里有 >=3 个"星期X/周X"
+        // 1. 找表头行：一行里有 >=3 个"星期X/周X"（截图课表的表头可能只有单字"一二三…"）
         var headerRow = -1
         var dayToCol = mapOf<Int, Int>()
         for ((r, row) in grid.withIndex()) {
             val m = mutableMapOf<Int, Int>()
             row.forEachIndexed { c, cell ->
-                DAY_RE.find(cell)?.let { f ->
-                    val d = dayIndex(f.groupValues[1].firstOrNull() ?: ' ')
-                    if (d > 0 && d !in m) m[d] = c
-                }
+                val d = dayFromCell(cell)
+                if (d > 0 && d !in m) m[d] = c
             }
             if (m.size >= 3) { headerRow = r; dayToCol = m; break }
         }
@@ -69,9 +67,20 @@ object TimetableParser {
         '五' -> 5; '六' -> 6; '日', '天' -> 7; else -> 0
     }
 
-    /** "第一二节 / 01、02小节 / 第9-10节 / 第十一十二节" → slot 0..5 */
+    /** 表头格 → 星期：优先"星期X/周X"；否则整格是单字星期（截图课表"一 二 三…"）也算 */
+    private fun dayFromCell(cell: String): Int {
+        DAY_RE.find(cell)?.let { return dayIndex(it.groupValues[1].firstOrNull() ?: ' ') }
+        val t = cell.trim()
+        val ch = t.firstOrNull() ?: return 0
+        return if (t.length <= 2 && ch in "一二三四五六日天") dayIndex(ch) else 0
+    }
+
+    /** "第一二节 / 01、02小节 / 第9-10节 / 第十一十二节 / 纯数字3（截图课表的单节号）" → slot 0..5 */
     fun slotIndexOf(text: String): Int? {
-        if (!text.contains("节")) return null
+        val t = text.trim()
+        // 截图课表的节次列常为纯数字单节号：1..12 → (n-1)/2
+        t.toIntOrNull()?.let { return if (it in 1..12) (it - 1) / 2 else null }
+        if (!t.contains("节")) return null
         val nums = mutableListOf<Int>()
         var i = 0
         while (i < text.length && nums.size < 2) {
@@ -140,7 +149,47 @@ object TimetableParser {
             out.addAll(parseGenericLine(line))
             pendingName = null
         }
+        if (out.isEmpty()) out.addAll(parseCardLike(t))
         return out
+    }
+
+    private val ROOM_HINT = Regex("(楼|室|馆|场|区|中心|教|号楼|栋|厅)|\\d")
+
+    /** 有明确周次文字的才算"表格内容"，卡片式截图（课名+教室+标签、无周次）交给 parseCardLike */
+    private val WEEK_TEXT = Regex("\\d+\\s*[-–~]\\s*\\d+\\s*周|第\\s*\\d+\\s*周|单周|双周|\\d+周")
+
+    /**
+     * 卡片式课表兜底（截图课表常见）：格子是"课名（可换行）/ @教室（可断行）/ [标签]"，
+     * 没有周次信息 → 课名取文字行（@ 前），教室取 @ 后或含楼室馆等线索的行并续接断行，
+     * 周次默认全学期（1-25），由用户在预览页修改。
+     */
+    private fun parseCardLike(text: String): List<RawCourse> {
+        if (WEEK_TEXT.containsMatchIn(text)) return emptyList()
+        val lines = text.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+        if (lines.isEmpty()) return emptyList()
+        val name = StringBuilder()
+        var room = ""
+        for (raw in lines) {
+            val line = raw.removePrefix("周]")
+            val at = line.indexOf('@')
+            when {
+                line.startsWith("[") || line.startsWith("（") || line.startsWith("(") -> {}
+                at >= 0 -> {
+                    // "@教1-101" 可能被拆成 "@东 / 10A- / 303"：@ 前归课名、@ 后起教室并续接断行
+                    val before = line.substringBefore('@').trim()
+                    if (before.isNotBlank() && before.firstOrNull()?.isDigit() != true) name.append(before)
+                    if (room.isEmpty()) room = line.substringAfter('@').trim()
+                }
+                name.isEmpty() && line.firstOrNull()?.isDigit() != true && !line.contains("/") -> name.append(line)
+                room.isEmpty() && ROOM_HINT.containsMatchIn(line) -> room = line
+                room.isEmpty() && line.firstOrNull()?.isDigit() != true && !line.contains("/") -> name.append(line)
+                room.isNotEmpty() && (line.all { it.isDigit() } || (line.firstOrNull()?.isDigit() == true && line.length <= 6)) -> room += line
+                else -> if (room.isEmpty()) room = line
+            }
+        }
+        val n = name.toString().replace("\n", "").trim()
+        if (n.length < 2 || n.any { it.isDigit() } || n.contains("节") || n.contains("星期")) return emptyList()
+        return listOf(RawCourse(n, cleanRoom(room.trim().trimStart('@')), "1-25"))
     }
 
     private fun parseGenericLine(line: String): List<RawCourse> {

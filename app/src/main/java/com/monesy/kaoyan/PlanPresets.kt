@@ -51,4 +51,7 @@ data class PlanOptions(
     val grammarDone: Boolean = false,      // 语法长难句已过
     val majorRound1Done: Boolean = false,  // 专业课过了一轮
     val politicsStarted: Boolean = false,  // 政治已启动
+
+    // ---- 复习起点：中途/后期开始的用户直接从对应阶段生成（0 基础 1 强化 2 真题 3 冲刺）----
+    val startFrom: Int = 0,
 )

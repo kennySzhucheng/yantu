@@ -15,7 +15,7 @@ object Stats {
         val totalMinutes: Int,
         val checkedCount: Int,
         val taskCount: Int,
-        val wordStreak: Int,
+        val streak: Int,
         val targetText: String,
         val targetMinHours: Int,
         val targetMaxHours: Int,
@@ -54,7 +54,7 @@ object Stats {
         else if (minH == maxH) "$minH 小时/周"
         else "$minH–$maxH 小时/周"
         return WeekSummary(
-            minutes, checked, total, store.wordStreak(reportDate), targetText, minH, maxH,
+            minutes, checked, total, store.bottomLineStreak(reportDate), targetText, minH, maxH,
         )
     }
 }

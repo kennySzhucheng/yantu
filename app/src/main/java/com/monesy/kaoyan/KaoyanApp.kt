@@ -15,7 +15,10 @@ class KaoyanApp : Application() {
         // 配置先于一切：UI、WorkManager Worker、Receiver 都依赖它
         ConfigLoader.load(this)
         Notify.createChannel(this)
-        // 只补断链，不 REPLACE——避免把等待补发的过期任务取消掉
-        appScope.launch { Notify.healChains(this@KaoyanApp) }
+        // 只补断链，不 REPLACE——避免把等待补发的过期任务取消掉；顺带重排节点临近提醒
+        appScope.launch {
+            Notify.healChains(this@KaoyanApp)
+            Notify.scheduleNodeReminders(this@KaoyanApp)
+        }
     }
 }

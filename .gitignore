@@ -20,3 +20,6 @@ keystore.properties
 # 验证截图临时目录
 verify/
 tools/push_via_api.py
+
+# 本地构建工具（gradle 发行版）
+.tools/

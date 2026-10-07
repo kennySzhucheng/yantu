@@ -35,6 +35,8 @@ object Notify {
     const val KIND_EVENING = "evening"
     const val KIND_BOTTOMLINE = "bottomline"
     const val KIND_WEEKLY = "weekly"
+    const val KIND_NODE = "node"
+    private const val TAG_NODE = "node_reminder"
     private val ALL_KINDS = listOf(KIND_MORNING, KIND_EVENING, KIND_BOTTOMLINE, KIND_WEEKLY)
 
     fun createChannel(context: Context) {
@@ -64,6 +66,35 @@ object Notify {
     suspend fun scheduleAll(context: Context) {
         for (kind in ALL_KINDS) {
             enqueueNext(context, kind)
+        }
+    }
+
+    /**
+     * 重大节点临近提醒：为未来的硬节点（INFO/EXAM，非时间待定）排
+     * 提前 7 天 / 3 天 / 当天 上午 9 点的推送。配置变化、应用启动、开机时重排；
+     * 触发时 Worker 会再次核对节点是否已完成，已完成就不打扰。
+     */
+    suspend fun scheduleNodeReminders(context: Context) {
+        val store = Store(context)
+        val wm = WorkManager.getInstance(context)
+        wm.cancelAllWorkByTag(TAG_NODE)
+        if (!store.nodeRemindersEnabled.first()) return
+        val today = LocalDate.now()
+        val done = store.doneNodes.first()
+        val now = LocalDateTime.now()
+        for ((node, days) in Plan.upcomingNodes(today)) {
+            if (node.soft || node.id in done) continue
+            for (offset in listOf(7L, 3L, 0L)) {
+                if (days < offset) continue
+                val fireAt = today.plusDays(days - offset).atTime(9, 0)
+                if (!fireAt.isAfter(now)) continue
+                val request = OneTimeWorkRequestBuilder<ReminderWorker>()
+                    .setInitialDelay(Duration.between(now, fireAt))
+                    .setInputData(workDataOf("kind" to KIND_NODE, "nodeId" to node.id, "offset" to offset))
+                    .addTag(TAG_NODE)
+                    .build()
+                wm.enqueue(request)
+            }
         }
     }
 
@@ -150,18 +181,23 @@ class ReminderWorker(private val ctx: Context, params: WorkerParameters) : Corou
 
         if (!tooLate) {
             when (kind) {
-                Notify.KIND_MORNING -> if ("words" !in checked) {
-                    if (missed) push(
-                        id = 1001,
-                        title = "⏰ 补提醒：今天的 40 个单词还没背",
-                        text = "刚才没能按时提醒你。现在补上，别断卡。" + (nearest?.let { " $it。" } ?: ""),
-                        kind = Notify.KIND_MORNING, wordsAction = true, snoozeAction = true,
-                    ) else push(
-                        id = 1001,
-                        title = "🌅 底线任务：今天的 40 个单词",
-                        text = "起床后立刻背，别等「有空的时候」。" + (nearest?.let { " $it。" } ?: ""),
-                        kind = Notify.KIND_MORNING, wordsAction = true, snoozeAction = true,
-                    )
+                Notify.KIND_MORNING -> {
+                    // 底线任务通用化：不再硬编码"单词"，按当前阶段实际底线任务提醒
+                    val bottoms = Plan.tasksFor(Plan.stageFor(today), today.dayOfWeek).filter { it.isBottomLine }
+                    val pending = bottoms.firstOrNull { it.id !in checked }
+                    if (pending != null) {
+                        if (missed) push(
+                            id = 1001,
+                            title = "⏰ 补提醒：${pending.title}还没完成",
+                            text = "刚才没能按时提醒你。现在补上，别断卡。" + (nearest?.let { " $it。" } ?: ""),
+                            kind = Notify.KIND_MORNING, wordsAction = true, snoozeAction = true,
+                        ) else push(
+                            id = 1001,
+                            title = "🌅 底线任务：${pending.title}",
+                            text = "开始今天的第一个底线任务，别等「有空的时候」。" + (nearest?.let { " $it。" } ?: ""),
+                            kind = Notify.KIND_MORNING, wordsAction = true, snoozeAction = true,
+                        )
+                    }
                 }
                 Notify.KIND_EVENING -> {
                     val stage = Plan.stageFor(today)
@@ -182,13 +218,33 @@ class ReminderWorker(private val ctx: Context, params: WorkerParameters) : Corou
                         )
                     }
                 }
-                Notify.KIND_BOTTOMLINE -> if ("words" !in checked) {
-                    push(
-                        id = 1003,
-                        title = "⚠️ 底线要破了：今天的 40 个单词还没背",
-                        text = "病假、考试周、过年都不破例。现在背，还来得及。",
-                        kind = Notify.KIND_BOTTOMLINE, wordsAction = true, snoozeAction = true,
-                    )
+                Notify.KIND_BOTTOMLINE -> {
+                    val bottoms = Plan.tasksFor(Plan.stageFor(today), today.dayOfWeek).filter { it.isBottomLine }
+                    val pending = bottoms.firstOrNull { it.id !in checked }
+                    if (pending != null) {
+                        push(
+                            id = 1003,
+                            title = "⚠️ 底线要破了：${pending.title}还没完成",
+                            text = "底线任务状态再差也不能断。现在做，还来得及。",
+                            kind = Notify.KIND_BOTTOMLINE, wordsAction = true, snoozeAction = true,
+                        )
+                    }
+                }
+                Notify.KIND_NODE -> {
+                    val nodeId = inputData.getString("nodeId") ?: ""
+                    val offset = inputData.getLong("offset", 0L)
+                    val node = Plan.keyNodes.firstOrNull { it.id == nodeId }
+                    if (node != null && node.id !in store.doneNodes.first()) {
+                        val left = java.time.temporal.ChronoUnit.DAYS.between(today, node.date)
+                        if (left in 0..offset) {
+                            push(
+                                id = 1100 + (kotlin.math.abs(node.id.hashCode()) % 800),
+                                title = if (left == 0L) "📍 今天：「${node.title}」" else "📍 「${node.title}」还有 $left 天",
+                                text = node.detail,
+                                kind = "",
+                            )
+                        }
+                    }
                 }
                 else -> {
                     val s = Stats.weekSummary(store, today)
@@ -210,7 +266,7 @@ class ReminderWorker(private val ctx: Context, params: WorkerParameters) : Corou
                         id = 1004,
                         title = "📊 本周备考总结",
                         text = "打卡 ${s.checkedCount}/${s.taskCount} 次 · 估算投入约 ${s.hoursText}" +
-                            "（目标 ${s.targetText}）\n连续背单词 ${s.wordStreak} 天$rewardLine",
+                            "（目标 ${s.targetText}）\n底线连续 ${s.streak} 天$rewardLine",
                     )
                 }
             }
@@ -245,7 +301,7 @@ class ReminderWorker(private val ctx: Context, params: WorkerParameters) : Corou
             .setAutoCancel(true)
         if (wordsAction) {
             builder.addAction(
-                0, "✅ 已背单词",
+                0, "✅ 完成底线任务",
                 PendingIntent.getBroadcast(
                     ctx, id * 10 + 1,
                     Intent(ctx, CheckinReceiver::class.java).putExtra("notifId", id),
@@ -269,7 +325,7 @@ class ReminderWorker(private val ctx: Context, params: WorkerParameters) : Corou
     }
 }
 
-/** 通知按钮：一键完成单词打卡 */
+/** 通知按钮：一键完成当前第一个未完成的底线任务（不绑定具体任务 id） */
 class CheckinReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getIntExtra("notifId", 1001)
@@ -278,9 +334,10 @@ class CheckinReceiver : BroadcastReceiver() {
             try {
                 val today = LocalDate.now()
                 val store = Store(context)
-                if ("words" !in store.checkinFor(today).first()) {
-                    store.toggleCheckin(today, "words")
-                }
+                val checked = store.checkinFor(today).first()
+                val target = Plan.tasksFor(Plan.stageFor(today), today.dayOfWeek)
+                    .firstOrNull { it.isBottomLine && it.id !in checked }
+                if (target != null) store.toggleCheckin(today, target.id)
                 NotificationManagerCompat.from(context).cancel(id)
             } finally {
                 pending.finish()
@@ -307,6 +364,7 @@ class BootReceiver : BroadcastReceiver() {
             try {
                 Notify.createChannel(context)
                 Notify.healChains(context)
+                Notify.scheduleNodeReminders(context)
             } finally {
                 pending.finish()
             }

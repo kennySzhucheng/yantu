@@ -28,8 +28,8 @@ android {
         applicationId = "com.monesy.studyreminder"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 6
+        versionName = "1.4.0"
     }
 
     compileOptions {
@@ -38,6 +38,17 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    // 发布瘦身：中文 OCR 模型是通用资产无法拆，native 库按 ABI 拆分。
+    // arm64-v8a 覆盖主流手机，armeabi-v7a 兼容老设备，x86_64 供模拟器；不再生成全量 universal 包
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = false
+        }
     }
 
     buildTypes {
@@ -58,4 +69,6 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.jxl)
+    // 课表图片识别：ML Kit 中文 OCR（离线模型打包进 APK，不联网、不依赖 GMS）
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
 }

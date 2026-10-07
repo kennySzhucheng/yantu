@@ -30,6 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /** 计划生成选项表单（向导第 3 步与设置里的"生成个性化计划"共用） */
+
+private val startFromLabels = listOf("从零开始", "已过基础期", "已进真题期", "冲刺起步")
+
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun PlanOptionsForm(options: PlanOptions, onChange: (PlanOptions) -> Unit) {
@@ -83,6 +86,25 @@ fun PlanOptionsForm(options: PlanOptions, onChange: (PlanOptions) -> Unit) {
                 label = { Text("主科基准(分钟)") }, singleLine = true,
                 modifier = Modifier.weight(1f),
             )
+        }
+
+        Label("复习起点（中后期开始直接从对应阶段生成）")
+        ChipRow(startFromLabels, startFromLabels[o.startFrom.coerceIn(0, 3)]) { label ->
+            val idx = startFromLabels.indexOf(label).coerceIn(0, 3)
+            // 起点联动：起点之前的进度视为已完成
+            val o2 = when (idx) {
+                1 -> o.copy(startFrom = 1, wordsDone = true, grammarDone = true, mathBaseDone = true)
+                2 -> o.copy(
+                    startFrom = 2, wordsDone = true, grammarDone = true, mathBaseDone = true,
+                    linearDone = true, probDone = true, majorRound1Done = true, politicsStarted = true,
+                )
+                3 -> o.copy(
+                    startFrom = 3, wordsDone = true, grammarDone = true, mathBaseDone = true,
+                    linearDone = true, probDone = true, majorRound1Done = true, politicsStarted = true,
+                )
+                else -> o.copy(startFrom = 0)
+            }
+            onChange(o2)
         }
 
         Label("已完成的进度（计划会从你所在的位置开始）")

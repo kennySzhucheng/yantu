@@ -4,7 +4,6 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,11 +44,11 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 @Composable
-fun StagesScreen(today: LocalDate, store: Store) {
-    val checkins by produceState<Map<LocalDate, Set<String>>>(emptyMap(), today) {
+fun StagesScreen(today: LocalDate, store: Store) {    val checkins by produceState<Map<LocalDate, Set<String>>>(emptyMap(), today) {
         value = store.readAllCheckins()
     }
     val currentId = Plan.stageFor(today).id
+    val currentStage = Plan.stages.firstOrNull { it.id == currentId }
 
     Column(
         Modifier
@@ -58,9 +57,9 @@ fun StagesScreen(today: LocalDate, store: Store) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("六个阶段 · 18 个月", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("备考阶段（共 ${Plan.stages.size} 个）", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text(
-            "学期缓推 + 假期冲刺。真正拉开差距的是假期，学期只是「不停机」。",
+            currentStage?.let { stageStrategy(it) } ?: "配置缺失：请在 设置 → 配置管理 检查计划。",
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -149,8 +148,9 @@ fun StagesScreen(today: LocalDate, store: Store) {
 }
 
 /**
- * 阶段每日打卡表：列为教学周序号（对齐周一）、行为星期。
- * 当天任务全部打卡 = 绿色✓；部分打卡 = 黄；没打卡 = 灰；还没到 = 空框。
+ * 阶段每日打卡表（日历式）：左侧一列是教学周序号，每行从周一排到周日，
+ * 与平时翻日历的习惯一致；格内数字为"日"，今天描边高亮。
+ * 当天任务全部打卡 = 深绿✓；达标 = 浅绿；部分打卡 = 黄；没打卡 = 灰；还没到 = 空框。
  */
 @Composable
 private fun StageCheckinGrid(stage: Stage, today: LocalDate, checkins: Map<LocalDate, Set<String>>) {
@@ -158,90 +158,103 @@ private fun StageCheckinGrid(stage: Stage, today: LocalDate, checkins: Map<Local
     val spanDays = ChronoUnit.DAYS.between(firstMonday, stage.end) + 1
     val totalWeeks = ((spanDays + 6) / 7).toInt()
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-    ) {
+    Column(Modifier.fillMaxWidth()) {
         Text(
-            "每日打卡（第 ${Plan.stages.indexOf(stage) + 1} 阶段）",
+            "每日打卡",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
         )
+        Text(
+            "一行 = 一个教学周，从周一到周日；格内数字是日期，描边是今天",
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Spacer(Modifier.size(6.dp))
-        // 周次表头
-        Row {
-            Text("周", Modifier.width(16.dp), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            repeat(totalWeeks) { w ->
+        // 表头：周数列 + 星期
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("周", Modifier.width(26.dp), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            listOf("一", "二", "三", "四", "五", "六", "日").forEach { d ->
                 Text(
-                    "${w + 1}",
-                    Modifier.width(17.dp),
-                    fontSize = 8.sp,
+                    d,
+                    Modifier.width(22.dp),
+                    fontSize = 9.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        // 每个星期一行
-        for (dow in 1..7) {
+        // 每个教学周一行
+        for (w in 0 until totalWeeks) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 1.dp)) {
                 Text(
-                    "一二三四五六日"[dow - 1].toString(),
-                    Modifier.width(16.dp),
+                    "${w + 1}",
+                    Modifier.width(26.dp),
                     fontSize = 9.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                for (w in 0 until totalWeeks) {
+                for (dow in 1..7) {
                     val date = firstMonday.plusDays((w * 7 + (dow - 1)).toLong())
                     val inStage = !date.isBefore(stage.start) && !date.isAfter(stage.end)
                     val isFuture = date.isAfter(today)
+                    val isToday = date == today
                     var bg = androidx.compose.ui.graphics.Color.Transparent
                     var fg = MaterialTheme.colorScheme.onSurfaceVariant
-                    var showCheck = false
-                    var isFutureCell = false
-                    if (inStage) {
-                        if (isFuture) {
-                            isFutureCell = true
-                        } else {
-                            val tasks = Plan.tasksFor(stage, date.dayOfWeek)
-                            val doneSet = checkins[date] ?: emptySet()
-                            val doneCount = doneSet.count { id -> tasks.any { it.id == id } }
-                            when {
-                                isDayFull(tasks, doneSet) -> {
-                                    // 全部完成：深绿
-                                    bg = MaterialTheme.colorScheme.secondary
-                                }
-                                isDayMet(tasks, doneSet) -> {
-                                    // 达标：底线任务 + 其余过半 → 浅绿
-                                    bg = MaterialTheme.colorScheme.secondaryContainer
-                                }
-                                doneCount > 0 -> {
-                                    bg = MaterialTheme.colorScheme.tertiaryContainer
-                                    fg = MaterialTheme.colorScheme.onTertiaryContainer
-                                }
-                                else -> {
-                                    bg = MaterialTheme.colorScheme.surfaceVariant
-                                    fg = MaterialTheme.colorScheme.onSurfaceVariant
-                                }
+                    if (inStage && !isFuture) {
+                        val tasks = Plan.tasksFor(stage, date.dayOfWeek)
+                        val doneSet = checkins[date] ?: emptySet()
+                        val doneCount = doneSet.count { id -> tasks.any { it.id == id } }
+                        when {
+                            isDayFull(tasks, doneSet) -> {
+                                // 全部完成：深绿
+                                bg = MaterialTheme.colorScheme.secondary
+                                fg = MaterialTheme.colorScheme.onSecondary
+                            }
+                            isDayMet(tasks, doneSet) -> {
+                                // 达标：底线任务 + 其余过半 → 浅绿
+                                bg = MaterialTheme.colorScheme.secondaryContainer
+                                fg = MaterialTheme.colorScheme.onSecondaryContainer
+                            }
+                            doneCount > 0 -> {
+                                bg = MaterialTheme.colorScheme.tertiaryContainer
+                                fg = MaterialTheme.colorScheme.onTertiaryContainer
+                            }
+                            else -> {
+                                bg = MaterialTheme.colorScheme.surfaceVariant
+                                fg = MaterialTheme.colorScheme.onSurfaceVariant
                             }
                         }
                     }
                     Box(
                         Modifier
-                            .padding(horizontal = 0.5.dp)
-                            .size(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
+                            .padding(horizontal = 1.dp)
+                            .size(20.dp)
+                            .clip(RoundedCornerShape(5.dp))
                             .background(bg)
                             .then(
-                                if (isFutureCell) Modifier.border(
-                                    0.5.dp,
-                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                    RoundedCornerShape(4.dp),
-                                ) else Modifier,
+                                when {
+                                    isToday -> Modifier.border(
+                                        1.5.dp,
+                                        MaterialTheme.colorScheme.primary,
+                                        RoundedCornerShape(5.dp),
+                                    )
+                                    inStage && isFuture -> Modifier.border(
+                                        0.5.dp,
+                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                        RoundedCornerShape(5.dp),
+                                    )
+                                    else -> Modifier
+                                },
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (showCheck) Text("✓", fontSize = 9.sp, color = fg, fontWeight = FontWeight.Bold)
+                        if (inStage) {
+                            Text(
+                                "${date.dayOfMonth}",
+                                fontSize = 8.sp,
+                                color = fg,
+                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        }
                     }
                 }
             }
@@ -275,4 +288,19 @@ private fun legendBox(color: androidx.compose.ui.graphics.Color, label: String) 
         Box(Modifier.size(12.dp).clip(RoundedCornerShape(4.dp)).background(color))
         Text(" $label", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/** 阶段页顶部策略提示：跟随当前阶段变化（按阶段名关键字匹配，兼容内置示例与向导生成的计划） */
+private fun stageStrategy(stage: Stage): String = when {
+    stage.name.contains("基础") || stage.name.contains("缓") || stage.name.contains("起步") ->
+        "基础期策略：习惯先成型，强度后跟上——节奏稳定比单日时长更重要。"
+    stage.name.contains("强化") || stage.name.contains("爬坡") || stage.name.contains("稳推") ->
+        "强化期策略：整块时间啃硬骨头，主科强化与真题起步并行。"
+    stage.name.contains("真题") ->
+        "真题期策略：一切以限时实练为核心，分数是从真题里长出来的。"
+    stage.name.contains("冲刺") ->
+        "冲刺期策略：背诵 + 模考，回归错题本，停刷新题，稳住心态。"
+    stage.name.contains("复试") ->
+        "复试期策略：初试只是入场券，笔试与面试素材两手抓，出分前就该启动。"
+    else -> "按阶段目标推进；真正拉开差距的是假期，学期只是「不停机」。"
 }
