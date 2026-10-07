@@ -293,7 +293,7 @@ fun SettingsScreen(
                 Text(Config.aboutSubjects, fontSize = 13.sp)
                 Text(Config.aboutTarget, fontSize = 13.sp)
                 Text(Config.aboutSource, fontSize = 13.sp)
-                Text("${Config.appTitle} v1.5.0 · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${Config.appTitle} v1.5.1 · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
                     TextButton(onClick = {
                         runCatching {

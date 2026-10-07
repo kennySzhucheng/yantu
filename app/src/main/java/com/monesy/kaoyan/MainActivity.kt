@@ -454,7 +454,7 @@ fun AppRoot() {
                     },
                     onExportTemplate = { templateExportPicker.launch("计划模板.json") },
                     onEditPlan = { subScreen = "planEditor" },
-                    onExportBackup = { backupExportPicker.launch("研途数据备份.json") },
+                    onExportBackup = { backupExportPicker.launch("日拱一卒数据备份.json") },
                     onImportBackup = { backupImportPicker.launch(arrayOf("application/json", "*/*")) },
                     onReset = {
                         scope.launch {

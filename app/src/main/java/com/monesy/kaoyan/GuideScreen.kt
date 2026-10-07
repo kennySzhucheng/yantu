@@ -53,13 +53,21 @@ import androidx.compose.ui.unit.sp
  */
 
 /** 教程内容版本：完整教程或更新速览看完后写入；提升版本号会让老用户在下次启动看到「更新内容」 */
-const val TUTORIAL_VERSION = 2
+const val TUTORIAL_VERSION = 3
 
 // ---------- 更新内容速览（只给升级用户看，完整引导是全新用户的） ----------
 
 private data class UpdateGroup(val version: String, val items: List<String>)
 
 private val updateGroups = listOf(
+    UpdateGroup(
+        "v1.5.1",
+        listOf(
+            "应用更名为「日拱一卒」（日拱一卒，功不唐捐）——原「研途」名称与第三方考研机构商标重名，为避免混淆而更换",
+            "更名不影响任何数据：打卡记录、计划、课表、奖励全部保留",
+            "桌面图标名称同步更新，功能与使用方式完全不变",
+        ),
+    ),
     UpdateGroup(
         "v1.5.0",
         listOf(
@@ -107,7 +115,7 @@ fun WhatsNewScreen(onDone: () -> Unit) {
             .padding(24.dp),
     ) {
         Spacer(Modifier.height(16.dp))
-        Text("🎉 研途更新了", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("🎉 日拱一卒更新了", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text(
             "本次更新内容如下；完整功能引导在 设置 → 帮助 → 使用教程",
             fontSize = 12.5.sp,

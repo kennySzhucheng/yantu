@@ -11,7 +11,7 @@ import java.time.LocalTime
  * 这是 App 全部个性化参数的唯一入口——普适化时用户只需改 JSON，不用碰代码。
  */
 object Config {
-    var appTitle: String = "学习提醒"
+    var appTitle: String = "日拱一卒"
     var countdownLabel: String = "距考试初试"
     var examName: String = ""
     var targetScore: Int = 0
@@ -50,7 +50,9 @@ object ConfigLoader {
             val user = UserConfig.readAll(store)
 
             val app = UserConfig.merge(read(context, "config/app.json"), user.optJSONObject(UserConfig.SECTION_APP))
+            // 旧版应用名"研途"与第三方商标重名：读取时自动迁移为"日拱一卒"（含老用户配置层旧值）
             Config.appTitle = app.optString("appTitle", Config.appTitle)
+                .let { if (it == "研途" || it.isBlank()) "日拱一卒" else it }
             Config.countdownLabel = app.optString("countdownLabel", Config.countdownLabel)
             Config.examName = app.optString("examName", Config.examName)
             Config.targetScore = app.optInt("targetScore", Config.targetScore)
