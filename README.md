@@ -77,11 +77,20 @@
 
 ## 📦 安装
 
-**🌍 GitHub Releases（推荐：无需提取码，点击即下）** —— [releases/latest](../../releases/latest)
+两个下载入口，任选其一（安装包相同）：
 
-同时可以浏览**全部源码、历史版本与每版更新日志**。直连慢时，可在 release 页面里复制 APK 链接，在前面加 `https://ghproxy.net/` 加速。
+**🇨🇳 国内直连（最快）** —— 蓝奏云
 
-**🇨🇳 蓝奏云国内直连** —— v1.6.0 安装包上传后在此更新直链（无需登录、满速下载）；期间请使用上方 GitHub 入口。
+| 安装包 | 链接 | 提取码 |
+|---|---|---|
+| `rigong-v1.6.0-arm64.apk`（主流手机） | [蓝奏云下载](https://wwbai.lanzouv.com/iIMNx4b94wpg) | `7qo5` |
+| `rigong-v1.6.0-v7a.apk`（32 位老设备） | [蓝奏云下载](https://wwbai.lanzouv.com/i7et24b94yxg) | `hhih` |
+
+打开链接 → 输入提取码 → 点「普通下载」，无需登录、无需客户端。
+
+**🌍 GitHub Releases** —— [releases/latest](../../releases/latest)
+
+无需任何提取码，点击即下；同时可以浏览**全部源码、历史版本与每版更新日志**。直连慢时，可在 release 页面里复制 APK 链接，在前面加 `https://ghproxy.net/` 加速。
 
 > 与旧版本签名一致，覆盖安装**保留全部数据**。图片识别的中文模型已内置在 APK 内（约 22MB）。
 
