@@ -2,7 +2,13 @@ package com.monesy.kaoyan
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -69,9 +75,12 @@ fun TodayScreen(
     checkedYesterday: Set<String>,
     dayBefore: LocalDate,
     checkedDayBefore: Set<String>,
+    rewardJournal: List<RewardEntry>,
     onToggle: (String) -> Unit,
     onDurationChange: (String, Int) -> Unit,
     onToggleDate: (LocalDate, String) -> Unit,
+    onRewardDelete: (RewardEntry) -> Unit,
+    onRewardClear: () -> Unit,
 ) {
     val stage = Plan.stageFor(today)
     val tasks = Plan.tasksFor(stage, today.dayOfWeek)
@@ -80,7 +89,10 @@ fun TodayScreen(
     val days = Plan.daysUntil(examDate, today)
     val progress = Plan.journeyProgress(today, examDate)
     val done = tasks.count { it.id in checked }
+    val met = isDayMet(tasks, checked)
+    val todayReward = rewardJournal.lastOrNull { it.date == today && it.kind == 'D' }
     var makeupDate by remember { mutableStateOf<LocalDate?>(null) }
+    var showRewardLog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -134,7 +146,8 @@ fun TodayScreen(
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "${examDate.year}年${examDate.monthValue}月${examDate.dayOfMonth}日（预计）· 目标 ${Config.targetScore} 分",
+                    "${examDate.year}年${examDate.monthValue}月${examDate.dayOfMonth}日（预计）" +
+                        if (Config.targetScore > 0) " · 目标 ${Config.targetScore} 分" else "",
                     fontSize = 13.sp,
                 )
                 Spacer(Modifier.height(12.dp))
@@ -372,7 +385,7 @@ fun TodayScreen(
                     )
                     Spacer(Modifier.weight(1f))
                     Text(
-                        "已完成 $done/${tasks.size}" + if (isDayMet(tasks, checked)) " · 已达标" else "",
+                        "已完成 $done/${tasks.size}" + if (met) " · 已达标" else "",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.secondary,
                         fontWeight = FontWeight.Medium,
@@ -405,6 +418,48 @@ fun TodayScreen(
                     fontSize = 11.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+
+                // ---- 达标瞬间的局部庆祝：弹出「完成 + 今日奖励」，不打扰、就在手边 ----
+                // （打开应用时若已达标，AnimatedVisibility 初始即显示，不重播动画）
+                AnimatedVisibility(
+                    visible = met,
+                    enter = fadeIn(tween(250)) + scaleIn(
+                        initialScale = 0.8f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow,
+                        ),
+                    ),
+                    exit = fadeOut(tween(200)),
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(
+                                if (done >= tasks.size) "🎉 今日任务全部完成！" else "🎉 今日达标！",
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            if (todayReward != null) {
+                                Text(
+                                    "🎁 奖励：${todayReward.text}",
+                                    fontSize = 13.5.sp,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                            }
+                            TextButton(
+                                onClick = { showRewardLog = true },
+                                modifier = Modifier.padding(top = 2.dp),
+                            ) {
+                                Text("查看奖励日志", fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -523,11 +578,28 @@ fun TodayScreen(
             }
         }
 
-        // ---- 页脚 ----
-        Text(
-            "${Config.schoolFrom} → ${Config.schoolTo}\n${Config.subjects}",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // ---- 页脚（未配置院校 / 科目时整行隐藏） ----
+        val footLines = buildList {
+            if (Config.schoolFrom.isNotBlank() || Config.schoolTo.isNotBlank()) {
+                add("${Config.schoolFrom.ifBlank { "我的本科" }} → ${Config.schoolTo.ifBlank { "目标院校" }}")
+            }
+            if (Config.subjects.isNotBlank()) add(Config.subjects)
+        }
+        if (footLines.isNotEmpty()) {
+            Text(
+                footLines.joinToString("\n"),
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+
+    if (showRewardLog) {
+        RewardLogDialog(
+            entries = rewardJournal,
+            onDelete = onRewardDelete,
+            onClearAll = onRewardClear,
+            onDismiss = { showRewardLog = false },
         )
     }
 

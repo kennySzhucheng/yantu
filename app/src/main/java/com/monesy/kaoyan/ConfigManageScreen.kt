@@ -117,7 +117,12 @@ fun ConfigManageScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("考试信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(Config.countdownLabel, fontSize = 13.sp)
-                Text("初试：${Config.examDate} · 目标分：${Config.targetScore} · 起始：${Plan.PLAN_START}", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "初试：${Config.examDate}" +
+                        (if (Config.targetScore > 0) " · 目标分：${Config.targetScore}" else "") +
+                        " · 起始：${Plan.PLAN_START}",
+                    fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 OutlinedButton(onClick = { showExamEdit = true }) { Text("修改考试信息") }
             }
         }
@@ -243,9 +248,14 @@ private fun ExamEditDialog(
     onDismiss: () -> Unit,
     onConfirm: (String, LocalDate, Int, LocalDate) -> Unit,
 ) {
-    var name by remember { mutableStateOf(Config.countdownLabel.removePrefix("距 ").removeSuffix(" 初试")) }
+    // 倒计时标签形如「距 28考研 初试」/「距考试初试」：去头尾后的核心词即考试名称
+    var name by remember {
+        mutableStateOf(
+            Config.countdownLabel.removePrefix("距").removeSuffix("初试").trim().ifBlank { Config.examName }
+        )
+    }
     var examDate by remember { mutableStateOf(Config.examDate) }
-    var score by remember { mutableStateOf(Config.targetScore.toString()) }
+    var score by remember { mutableStateOf(if (Config.targetScore > 0) Config.targetScore.toString() else "") }
     var planStart by remember { mutableStateOf(Plan.PLAN_START) }
     var pickTarget by remember { mutableStateOf<String?>(null) } // "exam" | "start"
 

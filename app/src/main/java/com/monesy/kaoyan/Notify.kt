@@ -252,6 +252,8 @@ class ReminderWorker(private val ctx: Context, params: WorkerParameters) : Corou
                     if (s.targetMinHours > 0 && s.totalMinutes >= s.targetMinHours * 60) {
                         val rewardText = if (store.hasReward(today, 'W')) {
                             store.rewardJournal.first().lastOrNull { it.kind == 'W' }?.text ?: ""
+                        } else if (store.isRewardSkipped(today, 'W')) {
+                            ""
                         } else {
                             val pool = Config.rewardWeekly
                             if (pool.isEmpty()) "" else {

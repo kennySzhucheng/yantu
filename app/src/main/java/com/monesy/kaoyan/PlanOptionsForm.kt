@@ -51,7 +51,7 @@ fun PlanOptionsForm(options: PlanOptions, onChange: (PlanOptions) -> Unit) {
         }
         OutlinedTextField(
             value = o.major, onValueChange = { onChange(o.copy(major = it)) },
-            label = { Text("专业课名称（如 807材料力学，可留空）") }, singleLine = true,
+            label = { Text("专业课名称（如 材料力学，可留空）") }, singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
 

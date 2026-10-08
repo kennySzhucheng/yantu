@@ -40,6 +40,7 @@ class Store(private val context: Context) {
     private val KEY_EVENING_TIME = stringPreferencesKey("notif_evening_time")
     private val KEY_DONE_NODES = stringSetPreferencesKey("done_nodes")
     private val KEY_REWARD_JOURNAL = stringPreferencesKey("reward_journal")
+    private val KEY_REWARD_SKIPPED = stringSetPreferencesKey("reward_skipped")
     private val KEY_USER_CONFIG = stringPreferencesKey("user_config")
     private val KEY_ONBOARDED = booleanPreferencesKey("onboarded")
     private val KEY_THEME = stringPreferencesKey("theme_mode")
@@ -203,7 +204,7 @@ class Store(private val context: Context) {
             ?.split('\n')
             ?.any { it.startsWith("${date}|${kind}|") } == true
 
-    /** 撤回某天某类奖励（打卡被取消时同步移除） */
+    /** 撤回某天某类奖励（打卡被取消时同步移除，不算"用户主动删除"） */
     suspend fun removeReward(date: LocalDate, kind: Char) {
         context.dataStore.edit { p ->
             val prefix = "${date}|$kind|"
@@ -211,6 +212,36 @@ class Store(private val context: Context) {
             p[KEY_REWARD_JOURNAL] = cur.split('\n')
                 .filter { it.isNotBlank() && !it.startsWith(prefix) }
                 .joinToString("\n")
+        }
+    }
+
+    /**
+     * 用户主动删除某条奖励：移除记录；若是「今天」的条目，同时记住今天不再自动补记
+     * ——否则勾选变化或重启后已删的今日奖励会再次出现，用户感觉"删不掉"。
+     */
+    suspend fun removeRewardManual(date: LocalDate, kind: Char) {
+        context.dataStore.edit { p ->
+            val prefix = "${date}|$kind|"
+            val cur = p[KEY_REWARD_JOURNAL] ?: ""
+            p[KEY_REWARD_JOURNAL] = cur.split('\n')
+                .filter { it.isNotBlank() && !it.startsWith(prefix) }
+                .joinToString("\n")
+            if (date == LocalDate.now()) {
+                p[KEY_REWARD_SKIPPED] = (p[KEY_REWARD_SKIPPED] ?: emptySet()) + "${date}|${kind}"
+            }
+        }
+    }
+
+    /** 今天该类奖励是否被用户主动删除过（删除后当天不再自动补记） */
+    suspend fun isRewardSkipped(date: LocalDate, kind: Char): Boolean =
+        context.dataStore.data.first()[KEY_REWARD_SKIPPED]?.contains("${date}|${kind}") == true
+
+    /** 清空全部奖励日志（用户在奖励日志里手动清空；今天的条目同样不再自动补记） */
+    suspend fun clearRewards() {
+        context.dataStore.edit { p ->
+            p.remove(KEY_REWARD_JOURNAL)
+            val today = LocalDate.now()
+            p[KEY_REWARD_SKIPPED] = (p[KEY_REWARD_SKIPPED] ?: emptySet()) + "${today}|D" + "${today}|W"
         }
     }
 

@@ -289,11 +289,18 @@ fun SettingsScreen(
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("关于", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(Config.aboutGoal, fontSize = 13.sp)
-                Text(Config.aboutSubjects, fontSize = 13.sp)
-                Text(Config.aboutTarget, fontSize = 13.sp)
-                Text(Config.aboutSource, fontSize = 13.sp)
-                Text("${Config.appTitle} v1.5.1 · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val aboutLines = listOf(Config.aboutGoal, Config.aboutSubjects, Config.aboutTarget, Config.aboutSource)
+                    .filter { it.isNotBlank() }
+                if (aboutLines.isEmpty()) {
+                    Text(
+                        "还没有考试档案——首次向导或 设置 → 配置管理 → 考试信息 填好后，这里会显示你的目标与科目",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    aboutLines.forEach { Text(it, fontSize = 13.sp) }
+                }
+                Text("${Config.appTitle} v1.6.0 · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
                     TextButton(onClick = {
                         runCatching {

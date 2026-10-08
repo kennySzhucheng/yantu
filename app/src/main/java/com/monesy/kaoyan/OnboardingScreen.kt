@@ -73,18 +73,18 @@ private data class WizardPreset(
 
 private val wizardPresets = listOf(
     WizardPreset(
-        "28考研 · 从零开始", "标准新考生：数一英一政治 + 材料力学，全程四阶段",
-        "28考研", LocalDate.of(2027, 12, 18), "380",
-        "东北林业大学", "华南理工大学", "机械（085500）",
-        "101思想政治理论", "201英语（一）", "301数学（一）", "807材料力学",
+        "28考研 · 从零开始", "标准新考生：数一英一政治 + 专业课，全程四阶段",
+        "28考研", LocalDate.of(2027, 12, 18), "",
+        "我的本科", "目标院校", "机械（085500）",
+        "101思想政治理论", "201英语（一）", "301数学（一）", "材料力学",
         0,
         PlanOptions(major = "材料力学"),
     ),
     WizardPreset(
         "28考研 · 已过基础", "单词/语法/高数/线代/概率已完成 → 直接从强化期生成",
-        "28考研", LocalDate.of(2027, 12, 18), "380",
-        "东北林业大学", "华南理工大学", "机械（085500）",
-        "101思想政治理论", "201英语（一）", "301数学（一）", "807材料力学",
+        "28考研", LocalDate.of(2027, 12, 18), "",
+        "我的本科", "目标院校", "机械（085500）",
+        "101思想政治理论", "201英语（一）", "301数学（一）", "材料力学",
         30,
         PlanOptions(
             major = "材料力学", startFrom = 1,
@@ -93,9 +93,9 @@ private val wizardPresets = listOf(
     ),
     WizardPreset(
         "27考研 · 真题期起步", "2026年12月初试，现在才用 → 只生成真题期+冲刺期",
-        "27考研", LocalDate.of(2026, 12, 19), "350",
+        "27考研", LocalDate.of(2026, 12, 19), "",
         "某双非本科", "目标院校待定", "机械考研",
-        "101思想政治理论", "201英语（一）", "301数学（一）", "807材料力学",
+        "101思想政治理论", "201英语（一）", "301数学（一）", "材料力学",
         90,
         PlanOptions(
             major = "材料力学", startFrom = 2,
@@ -104,10 +104,10 @@ private val wizardPresets = listOf(
         ),
     ),
     WizardPreset(
-        "冲刺起步 · 英二数三", "只剩最后几周 → 只生成冲刺段（跨考专业课示例）",
-        "27考研", LocalDate.of(2026, 12, 19), "360",
-        "某本科", "某大学", "电子信息（085400）",
-        "101思想政治理论", "204英语（二）", "302数学（二）", "908信号与系统",
+        "冲刺起步 · 英二数三", "只剩最后几周 → 只生成冲刺段（跨考示例）",
+        "27考研", LocalDate.of(2026, 12, 19), "",
+        "某本科", "目标院校", "电子信息（085400）",
+        "101思想政治理论", "204英语（二）", "302数学（二）", "信号与系统",
         20,
         PlanOptions(
             english = "英语二", math = "数学二", major = "信号与系统", startFrom = 3,
@@ -137,7 +137,7 @@ fun OnboardingScreen(store: Store, isRerun: Boolean, onDone: () -> Unit) {
     var examName by remember { mutableStateOf(if (isRerun) Config.examName.ifBlank { "28考研" } else "28考研") }
     var examNameTouched by remember { mutableStateOf(false) }
     var examDate by remember { mutableStateOf(Config.examDate) }
-    var targetScore by remember { mutableStateOf(if (Config.targetScore > 0) Config.targetScore.toString() else "380") }
+    var targetScore by remember { mutableStateOf(if (Config.targetScore > 0) Config.targetScore.toString() else "") }
     var planStart by remember { mutableStateOf(if (isRerun) Config.planStart else LocalDate.now()) }
 
     // 步骤 2 目标院校 + 科目四槽
@@ -295,7 +295,7 @@ fun OnboardingScreen(store: Store, isRerun: Boolean, onDone: () -> Unit) {
                     }
                     OutlinedTextField(
                         value = subjMajor, onValueChange = { subjMajor = it },
-                        label = { Text("专业课＊（如 807材料力学）") }, singleLine = true,
+                        label = { Text("专业课＊（如 材料力学）") }, singleLine = true,
                         isError = step1Tried && subjMajor.isBlank(),
                         modifier = Modifier.fillMaxWidth(),
                     )

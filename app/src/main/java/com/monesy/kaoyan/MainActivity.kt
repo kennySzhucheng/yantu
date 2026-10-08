@@ -393,6 +393,9 @@ fun AppRoot() {
     var streak by remember { mutableIntStateOf(0) }
     var totalDays by remember { mutableIntStateOf(0) }
     var weekSummary by remember { mutableStateOf<Stats.WeekSummary?>(null) }
+    // 上次看到的达标状态：奖励只在「未达标 → 达标」的边沿记录（首次进入对缺失记录补一次），
+    // 用户手动删掉的今日奖励不会因继续勾选任务而"复活"
+    var prevMet by remember { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(checked) {
         streak = store.bottomLineStreak(today)
         totalDays = store.bottomTotalDays()
@@ -401,15 +404,19 @@ fun AppRoot() {
         // 双层奖励·日常：当天达标（底线任务 + 其余过半）记一条小奖励；跌破达标线同步撤回
         val stage = Plan.stageFor(today)
         val tasks = Plan.tasksFor(stage, today.dayOfWeek)
-        val met = isDayMet(tasks, checked)
-        val hasReward = store.hasReward(today, 'D')
-        if (met && !hasReward && Config.rewardDaily.isNotEmpty()) {
-            val pool = Config.rewardDaily
-            val text = pool[store.rewardJournal.first().count { it.kind == 'D' } % pool.size]
-            store.appendReward(today, 'D', text)
-        } else if (!met && hasReward) {
-            store.removeReward(today, 'D')
+        val metNow = isDayMet(tasks, checked)
+        val prev = prevMet
+        if (prev == null || prev != metNow) {
+            val hasReward = store.hasReward(today, 'D')
+            if (metNow && !hasReward && Config.rewardDaily.isNotEmpty() && !store.isRewardSkipped(today, 'D')) {
+                val pool = Config.rewardDaily
+                val text = pool[store.rewardJournal.first().count { it.kind == 'D' } % pool.size]
+                store.appendReward(today, 'D', text)
+            } else if (!metNow && hasReward) {
+                store.removeReward(today, 'D')
+            }
         }
+        prevMet = metNow
     }
 
     var tab by remember { mutableIntStateOf(0) }
@@ -543,6 +550,7 @@ fun AppRoot() {
                     checkedYesterday = checkedYesterday,
                     dayBefore = dayBefore,
                     checkedDayBefore = checkedDayBefore,
+                    rewardJournal = rewardJournal,
                     onToggle = { taskId -> scope.launch { store.toggleCheckin(today, taskId) } },
                     onDurationChange = { taskId, minutes -> scope.launch { store.setDuration(taskId, minutes) } },
                     onToggleDate = { date, taskId ->
@@ -551,6 +559,8 @@ fun AppRoot() {
                             if ("makeup" !in store.checkinFor(date).first()) store.toggleCheckin(date, "makeup")
                         }
                     },
+                    onRewardDelete = { e -> scope.launch { store.removeRewardManual(e.date, e.kind) } },
+                    onRewardClear = { scope.launch { store.clearRewards() } },
                 )
                 1 -> MilestonesScreen(
                     today = today,

@@ -17,7 +17,7 @@ object ClipboardImporter {
     /**
      * 剪贴板 → 课程解析（编排三种路径）：
      * 1) HTML 表格（浏览器复制表格首选）→ 网格 → 通用表头解析
-     * 2) 纯文本但属"线性课表格式"（东林 jsxsd 等）→ 专用解析
+     * 2) 纯文本但属"线性课表格式"（jsxsd 等教务系统）→ 专用解析
      * 3) 纯文本其它形态 → 按制表符/多空格分列 → 通用解析
      */
     fun readCourses(context: Context): TimetableParser.Result {

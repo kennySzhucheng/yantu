@@ -141,9 +141,9 @@ object TimetableParser {
     private fun parseCell(text: String): List<RawCourse> {
         val out = mutableListOf<RawCourse>()
         var t = text.replace("\r", "").replace('\u00a0', ' ')
-        // 东林等格式：下一门课的「课名[教师]」被挤在上一条教室后面，按边界切行
+        // 网页课表常见排版：下一门课的「课名[教师]」被挤在上一条教室后面，按边界切行
         t = Regex(" +(?=[^\\s;\\[\\]]+\\[[^\\]]+\\])").replace(t, "\n")
-        // 重科等教务格式优先："教师 课名(3YJ1042A.01)(4-11,教学主楼D405)"
+        // 带括号课程代码的教务格式优先："教师 课名(3YJ1042A.01)(4-11,教学主楼D405)"
         if (t.contains('(')) parseBracketed(t).let { if (it.isNotEmpty()) return it }
         val lines = t.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
         var pendingName: String? = null
@@ -155,7 +155,7 @@ object TimetableParser {
             }
             val pending = pendingName
             if (pending != null && line.any { it.isDigit() }) {
-                // 详情行："1-4,6-15周;丹青楼401" / "第8周;成栋楼634"
+                // 详情行："1-4,6-15周;教学楼401" / "第8周;实验楼634"
                 val semi = line.indexOfFirst { it == ';' || it == '；' }
                 val weeksPart = if (semi >= 0) line.substring(0, semi) else line
                 val rest = if (semi >= 0) line.substring(semi + 1) else ""
@@ -166,11 +166,11 @@ object TimetableParser {
                     continue
                 }
             }
-            // 单行通用格式："高等数学@教1-101 (1-16周)" / "数学分析 1-16周 丹青楼301"
+            // 单行通用格式："高等数学@教1-101 (1-16周)" / "数学分析 1-16周 教学楼301"
             out.addAll(parseGenericLine(line))
             pendingName = null
         }
-        // 竖排多行格式（网页课表复制，如东林 jsxsd）："课名\n教师\n1-16周\n教室"
+        // 竖排多行格式（网页课表复制，如 jsxsd 教务）："课名\n教师\n1-16周\n教室"
         if (out.isEmpty()) parseVertical(lines)?.let { out.add(it) }
         if (out.isEmpty()) out.addAll(parseCardLike(t))
         return out
@@ -182,7 +182,7 @@ object TimetableParser {
      */
     private fun parseVertical(lines: List<String>): RawCourse? {
         if (lines.size < 2) return null
-        // 周次行：含"周"字（或纯数字表达式）且非时间行——否则教室行里的数字（"成栋楼302"）会被误判
+        // 周次行：含"周"字（或纯数字表达式）且非时间行——否则教室行里的数字（"教学楼302"）会被误判
         val weekIdx = lines.indexOfFirst {
             !it.contains(':') && (it.contains('周') || it.matches(Regex("[\\[\\]\\d,\\-–~，、\\s]+"))) &&
                 normalizeWeeks(it).isNotBlank()
@@ -206,12 +206,12 @@ object TimetableParser {
     private val ROOM_HINT = Regex("(楼|室|馆|场|区|中心|教|号楼|栋|厅)|\\d")
 
     private val TEACHER_PREFIX = Regex("^([\u4e00-\u9fa5]{2,4})([,，][\u4e00-\u9fa5]{2,4})*\\s+")
-    // 课程代码兼容数字开头（重科"3YJ1512A.01"）与字母开头（东林"TS1003A.01"）两类
+    // 课程代码兼容数字开头（如 "3YJ1512A.01"）与字母开头（如 "TS1003A.01"）两类
     private val COURSE_CODE = Regex("[A-Za-z0-9]{4,}\\.[0-9]+")
     private val PAREN_GROUP = Regex("\\(([^()]*)\\)")
 
     /**
-     * 重科等教务格式（特征：尾括号是"周次,教室"、其前是课程代码括号）：
+     * 一类教务格式（特征：尾括号是“周次,教室”、其前是课程代码括号）：
      * "王青峡 材料成型传输原理(3YJ1042A.01)(4-11,教学主楼D405)" → 课名 / 教室 / 4-11。
      * OCR 截图会把括号内容拆行，逐行解析失败后合并整格再试一次。
      */
@@ -336,7 +336,7 @@ object TimetableParser {
         return r.trim().trimEnd(';', '；', ' ')
     }
 
-    // ---------- 线性课表格式（网页课表复制：东林 jsxsd 等） ----------
+    // ---------- 线性课表格式（网页课表复制：jsxsd 等教务系统） ----------
 
     private val BLOCK_SECTION = Regex("^第[一二三四五六七八九十]+[一二三四五六七八九十]?节$")
     private val WEEKS_DAY = Regex("\\[([^\\]]*周)[^\\]]*\\]\\s*(星期[一二三四五六日天])")

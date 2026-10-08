@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
@@ -30,9 +31,11 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -70,6 +73,7 @@ fun MilestonesScreen(
     // 重大节点默认收起为摘要（最近节点 + 圆点缩略条），展开才显示完整卡片列表
     var majorExpanded by remember { mutableStateOf(false) }
     var dailyExpanded by remember { mutableStateOf(false) }
+    var showRewardLog by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -261,11 +265,13 @@ fun MilestonesScreen(
                         color = MaterialTheme.colorScheme.secondary,
                         fontWeight = FontWeight.Medium,
                     )
+                    Spacer(Modifier.width(4.dp))
+                    TextButton(onClick = { showRewardLog = true }) { Text("管理", fontSize = 13.sp) }
                 }
                 Spacer(Modifier.padding(bottom = 6.dp))
                 if (rewardJournal.isEmpty()) {
                     Text(
-                        "还没有奖励——今日任务全绿解锁第一条小奖励 🎁",
+                        "还没有奖励——今日任务达标（底线完成 + 其余过半）自动记一条小奖励 🎁",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -274,7 +280,7 @@ fun MilestonesScreen(
                         Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(if (e.kind == 'W') "🍽" else "🎁", fontSize = 17.sp)
                             Spacer(Modifier.width(8.dp))
-                            Column {
+                            Column(Modifier.weight(1f)) {
                                 Text(e.text, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
                                 Text(
                                     "${e.date.monthValue}月${e.date.dayOfMonth}日 · ${if (e.kind == 'W') "周达标大奖励" else "日常小奖励"}",
@@ -282,46 +288,66 @@ fun MilestonesScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
+                            IconButton(
+                                onClick = { scope.launch { store.removeRewardManual(e.date, e.kind) } },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "删除这条奖励",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                         }
                     }
                     if (rewardJournal.size > 3) {
                         Text(
-                            "…共 ${rewardJournal.size} 条",
+                            "…共 ${rewardJournal.size} 条，点右上「管理」查看全部",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
 
-                    // ---- 信息渠道清单（全离线备忘：考研情报该去哪搜集） ----
-                    Spacer(Modifier.padding(vertical = 10.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-                    Spacer(Modifier.padding(vertical = 6.dp))
-                    Text(
-                        "信息渠道 · 情报搜集指引",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        "考研信息战的一半是「知道去哪看」。把下面的渠道收藏好，按节奏定期查看。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
-                    )
-                    InfoSources.all.forEach { s ->
-                        Column(Modifier.padding(top = 8.dp)) {
-                            Text(
-                                "· ${s.name}",
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            Text("看什么：${s.what}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("何时看：${s.whenText}", fontSize = 12.sp, color = MaterialTheme.colorScheme.tertiary)
-                        }
+                // ---- 信息渠道清单（全离线备忘：考研情报该去哪搜集；与奖励记录有无无关） ----
+                Spacer(Modifier.padding(vertical = 10.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                Spacer(Modifier.padding(vertical = 6.dp))
+                Text(
+                    "信息渠道 · 情报搜集指引",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "考研信息战的一半是「知道去哪看」。把下面的渠道收藏好，按节奏定期查看。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                )
+                InfoSources.all.forEach { s ->
+                    Column(Modifier.padding(top = 8.dp)) {
+                        Text(
+                            "· ${s.name}",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text("看什么：${s.what}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("何时看：${s.whenText}", fontSize = 12.sp, color = MaterialTheme.colorScheme.tertiary)
                     }
                 }
             }
         }
+    }
+
+    if (showRewardLog) {
+        RewardLogDialog(
+            entries = rewardJournal,
+            onDelete = { e -> scope.launch { store.removeRewardManual(e.date, e.kind) } },
+            onClearAll = { scope.launch { store.clearRewards() } },
+            onDismiss = { showRewardLog = false },
+        )
     }
 }
 
