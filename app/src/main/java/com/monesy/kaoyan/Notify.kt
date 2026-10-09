@@ -39,6 +39,8 @@ object Notify {
     private const val TAG_NODE = "node_reminder"
     private val ALL_KINDS = listOf(KIND_MORNING, KIND_EVENING, KIND_BOTTOMLINE, KIND_WEEKLY)
 
+    internal fun isRecurringKind(kind: String): Boolean = kind in ALL_KINDS
+
     fun createChannel(context: Context) {
         val channel = NotificationChannel(
             CHANNEL_ID,
@@ -78,6 +80,9 @@ object Notify {
         val store = Store(context)
         val wm = WorkManager.getInstance(context)
         wm.cancelAllWorkByTag(TAG_NODE)
+        // v1.6.0 mistakenly chained one-off node reminders as "daily_node" work.
+        // Remove that stale chain when upgrading before scheduling the real one-off jobs.
+        wm.cancelUniqueWork(uniqueName(KIND_NODE))
         if (!store.nodeRemindersEnabled.first()) return
         val today = LocalDate.now()
         val done = store.doneNodes.first()
@@ -123,6 +128,9 @@ object Notify {
      * 链式调度：worker 触发完毕后自行调用本方法排下一次，按目标钟点重算，偏差不累积。
      */
     suspend fun enqueueNext(context: Context, kind: String) {
+        // Node reminders are individually scheduled one-off jobs. Chaining them here would
+        // create a permanent daily_node worker with no nodeId/offset payload.
+        if (!isRecurringKind(kind)) return
         val settings = Store(context).settings.first()
         val wm = WorkManager.getInstance(context)
         val enabled = when (kind) {
