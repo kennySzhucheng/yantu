@@ -58,9 +58,11 @@ object Timetable {
         } else listOfNotNull(part.trim().toIntOrNull())
     }.toSet()
 
-    /** 教学周序号（第 1 周 = SEMESTER_START 所在周） */
-    fun weekOf(date: LocalDate): Int =
-        (ChronoUnit.DAYS.between(SEMESTER_START, date) / 7 + 1).toInt()
+    /** 教学周序号（周一至周日，第 1 周 = SEMESTER_START 所在周） */
+    fun weekOf(date: LocalDate): Int {
+        val firstMonday = SEMESTER_START.minusDays((SEMESTER_START.dayOfWeek.value - 1).toLong())
+        return (Math.floorDiv(ChronoUnit.DAYS.between(firstMonday, date), 7L) + 1).toInt()
+    }
 
     fun classesFor(date: LocalDate): List<ClassEntry> =
         entries[date.dayOfWeek].orEmpty().filter { weekOf(date) in it.weeks }
