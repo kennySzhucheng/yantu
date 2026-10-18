@@ -83,8 +83,8 @@
 
 | 安装包 | 链接 | 提取码 |
 |---|---|---|
-| `rigong-v1.6.0-arm64.apk`（主流手机） | [蓝奏云下载](https://wwbai.lanzouv.com/iIMNx4b94wpg) | `7qo5` |
-| `rigong-v1.6.0-v7a.apk`（32 位老设备） | [蓝奏云下载](https://wwbai.lanzouv.com/i7et24b94yxg) | `hhih` |
+| `rigong-v1.6.1-arm64.apk`（主流手机） | [蓝奏云下载](https://wwbai.lanzoup.com/ipnhO4cgoh3c) | `6n2i` |
+| `rigong-v1.6.1-v7a.apk`（32 位老设备） | [蓝奏云下载](https://wwbai.lanzoup.com/irCdi4cgohrg) | `5n6u` |
 
 打开链接 → 输入提取码 → 点「普通下载」，无需登录、无需客户端。
 
