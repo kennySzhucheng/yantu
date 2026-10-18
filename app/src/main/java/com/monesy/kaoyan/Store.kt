@@ -1,21 +1,35 @@
 package com.monesy.kaoyan
 
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.io.IOException
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-private val Context.dataStore by preferencesDataStore(name = "kaoyan")
+// 数据文件损坏时回退为空配置而不是让每次启动都崩溃；用户仍可从导出/导入的备份恢复。
+private val Context.dataStore by preferencesDataStore(
+    name = "kaoyan",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+)
+
+// IO 异常（磁盘读失败等）回退为「空数据」而不是让设置/打卡流直接崩溃。
+private val Context.safeData: Flow<androidx.datastore.preferences.core.Preferences>
+    get() = dataStore.data.catch { e ->
+        if (e is IOException) emit(emptyPreferences()) else throw e
+    }
 
 /** 奖励日志条目：kind 'D' = 日常小奖励，'W' = 周达标大奖励 */
 data class RewardEntry(val date: LocalDate, val kind: Char, val text: String)
@@ -52,7 +66,7 @@ class Store(private val context: Context) {
     // ---------- 外观（light / dark / scheduled + 定时时段） ----------
 
     /** 兼容旧值：历史 "system" 迁移为 "light" */
-    val themeMode: Flow<String> = context.dataStore.data.map {
+    val themeMode: Flow<String> = context.safeData.map {
         when (val v = it[KEY_THEME] ?: "light") {
             "system" -> "light"
             else -> v
@@ -60,8 +74,8 @@ class Store(private val context: Context) {
     }
 
     /** 定时模式下：几点开深色 / 几点关深色（HH:mm，支持跨夜） */
-    val themeDarkStart: Flow<String> = context.dataStore.data.map { it[KEY_THEME_DARK_START] ?: "22:00" }
-    val themeDarkEnd: Flow<String> = context.dataStore.data.map { it[KEY_THEME_DARK_END] ?: "07:00" }
+    val themeDarkStart: Flow<String> = context.safeData.map { it[KEY_THEME_DARK_START] ?: "22:00" }
+    val themeDarkEnd: Flow<String> = context.safeData.map { it[KEY_THEME_DARK_END] ?: "07:00" }
 
     suspend fun setThemeMode(mode: String) =
         context.dataStore.edit { it[KEY_THEME] = mode }
@@ -74,7 +88,7 @@ class Store(private val context: Context) {
 
     // ---------- 用户配置层（向导/编辑/导入 都写这里） ----------
 
-    val userConfigRaw: Flow<String?> = context.dataStore.data.map { it[KEY_USER_CONFIG] }
+    val userConfigRaw: Flow<String?> = context.safeData.map { it[KEY_USER_CONFIG] }
 
     suspend fun setUserConfigRaw(json: String) =
         context.dataStore.edit { it[KEY_USER_CONFIG] = json }
@@ -85,7 +99,7 @@ class Store(private val context: Context) {
     // ---------- 数据备份（换机迁移：打卡历史 / 奖励日志 / 节点完成 / 时长覆盖 / 设置 / 用户配置） ----------
 
     suspend fun exportBackup(): org.json.JSONObject {
-        val prefs = context.dataStore.data.first().asMap()
+        val prefs = context.safeData.first().asMap()
         val arr = org.json.JSONArray()
         for ((key, value) in prefs) {
             val t: String
@@ -136,28 +150,28 @@ class Store(private val context: Context) {
 
     // ---------- 首次引导标记 ----------
 
-    val onboarded: Flow<Boolean> = context.dataStore.data.map { it[KEY_ONBOARDED] ?: false }
+    val onboarded: Flow<Boolean> = context.safeData.map { it[KEY_ONBOARDED] ?: false }
 
     suspend fun setOnboarded(v: Boolean) =
         context.dataStore.edit { it[KEY_ONBOARDED] = v }
 
     // ---------- 节点临近提醒开关 ----------
 
-    val nodeRemindersEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_NODE_REMIND] ?: true }
+    val nodeRemindersEnabled: Flow<Boolean> = context.safeData.map { it[KEY_NODE_REMIND] ?: true }
 
     suspend fun setNodeRemindersEnabled(v: Boolean) =
         context.dataStore.edit { it[KEY_NODE_REMIND] = v }
 
     // ---------- 使用教程版本（教程内容更新后老用户启动时自动重看一次） ----------
 
-    val tutorialVersion: Flow<Int> = context.dataStore.data.map { it[KEY_TUTORIAL_VERSION] ?: 0 }
+    val tutorialVersion: Flow<Int> = context.safeData.map { it[KEY_TUTORIAL_VERSION] ?: 0 }
 
     suspend fun setTutorialVersion(v: Int) =
         context.dataStore.edit { it[KEY_TUTORIAL_VERSION] = v }
 
     // ---------- 任务时长覆盖（仅可调任务会写入） ----------
 
-    val durationOverrides: Flow<Map<String, Int>> = context.dataStore.data.map { p ->
+    val durationOverrides: Flow<Map<String, Int>> = context.safeData.map { p ->
         val out = mutableMapOf<String, Int>()
         for ((key, value) in p.asMap()) {
             if (!key.name.startsWith("dur_")) continue
@@ -178,7 +192,7 @@ class Store(private val context: Context) {
 
     // ---------- 奖励日志 ----------
 
-    val rewardJournal: Flow<List<RewardEntry>> = context.dataStore.data.map { p ->
+    val rewardJournal: Flow<List<RewardEntry>> = context.safeData.map { p ->
         val out = mutableListOf<RewardEntry>()
         for (line in (p[KEY_REWARD_JOURNAL] ?: "").split('\n')) {
             if (line.isBlank()) continue
@@ -200,7 +214,7 @@ class Store(private val context: Context) {
 
     /** 当天是否已记过某类奖励（防止重复） */
     suspend fun hasReward(date: LocalDate, kind: Char): Boolean =
-        context.dataStore.data.first()[KEY_REWARD_JOURNAL]
+        context.safeData.first()[KEY_REWARD_JOURNAL]
             ?.split('\n')
             ?.any { it.startsWith("${date}|${kind}|") } == true
 
@@ -234,7 +248,7 @@ class Store(private val context: Context) {
 
     /** 今天该类奖励是否被用户主动删除过（删除后当天不再自动补记） */
     suspend fun isRewardSkipped(date: LocalDate, kind: Char): Boolean =
-        context.dataStore.data.first()[KEY_REWARD_SKIPPED]?.contains("${date}|${kind}") == true
+        context.safeData.first()[KEY_REWARD_SKIPPED]?.contains("${date}|${kind}") == true
 
     /** 清空全部奖励日志（用户在奖励日志里手动清空；今天的条目同样不再自动补记） */
     suspend fun clearRewards() {
@@ -246,7 +260,7 @@ class Store(private val context: Context) {
     }
 
     /** 已打勾完成的重大节点（KeyNode.id 集合） */
-    val doneNodes: Flow<Set<String>> = context.dataStore.data.map { p ->
+    val doneNodes: Flow<Set<String>> = context.safeData.map { p ->
         p[KEY_DONE_NODES] ?: emptySet()
     }
 
@@ -263,7 +277,7 @@ class Store(private val context: Context) {
 
     /** 一次性读取全部打卡记录：日期 → 已勾选任务ID集合 */
     suspend fun readAllCheckins(): Map<LocalDate, Set<String>> {
-        val prefs = context.dataStore.data.first()
+        val prefs = context.safeData.first()
         val result = mutableMapOf<LocalDate, Set<String>>()
         for ((key, value) in prefs.asMap()) {
             if (!key.name.startsWith("checkin_")) continue
@@ -274,7 +288,7 @@ class Store(private val context: Context) {
         return result
     }
 
-    val settings: Flow<Settings> = context.dataStore.data.map { p ->
+    val settings: Flow<Settings> = context.safeData.map { p ->
         Settings(
             examDate = p[KEY_EXAM_DATE]?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                 ?: Plan.DEFAULT_EXAM_DATE,
@@ -306,7 +320,7 @@ class Store(private val context: Context) {
 
     private fun checkinKey(date: LocalDate) = stringPreferencesKey("checkin_$date")
 
-    fun checkinFor(date: LocalDate): Flow<Set<String>> = context.dataStore.data.map { p ->
+    fun checkinFor(date: LocalDate): Flow<Set<String>> = context.safeData.map { p ->
         p[checkinKey(date)]?.split(',')?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
 
@@ -324,7 +338,7 @@ class Store(private val context: Context) {
 
     /** 连续背单词天数：若今天还没打卡，从昨天往前数（连续性不被"还没到晚上"打断）。 */
     suspend fun wordStreak(today: LocalDate): Int {
-        val p = context.dataStore.data.first()
+        val p = context.safeData.first()
         var day = today
         if (!isChecked(p, day, "words")) day = today.minusDays(1)
         var n = 0
@@ -367,7 +381,7 @@ class Store(private val context: Context) {
 
     /** 累计背单词天数。 */
     suspend fun wordTotalDays(): Int {
-        val p = context.dataStore.data.first()
+        val p = context.safeData.first()
         return p.asMap().count { (key, value) ->
             key.name.startsWith("checkin_") && (value as? String)?.split(',')?.contains("words") == true
         }

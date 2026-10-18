@@ -193,7 +193,7 @@ fun TodayScreen(
             Column(Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "阶段${"①②③④⑤⑥"[stage.id - 1]} ${stage.name}",
+                        "阶段${stageBadge(stage.id)} ${stage.name}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -222,6 +222,8 @@ fun TodayScreen(
         val weekend = remember(today) { Holidays.isWeekend(today) }
         val classes = remember(today) { Timetable.classesFor(today) }
         val weekNum = remember(today) { Timetable.weekOf(today) }
+        // 新安装/空课表时不要显示「第 N 教学周」——周次没有意义
+        val hasTimetable = remember { Timetable.allEntries().values.any { it.isNotEmpty() } }
         if (holiday != null) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -285,7 +287,7 @@ fun TodayScreen(
                         .clickable { coursesExpanded = !coursesExpanded },
                 ) {
                     Text(
-                        if (weekNum in 1..ClassTimes.SEMESTER_WEEKS) "今日课程 · 第 $weekNum/${ClassTimes.SEMESTER_WEEKS} 教学周"
+                        if (hasTimetable && weekNum in 1..ClassTimes.SEMESTER_WEEKS) "今日课程 · 第 $weekNum/${ClassTimes.SEMESTER_WEEKS} 教学周"
                         else "今日课程",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
@@ -333,7 +335,7 @@ fun TodayScreen(
                                     Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.width(68.dp)) {
                                             Text(
-                                                Timetable.slotLabels[c.slot],
+                                                Timetable.slotLabels.getOrElse(c.slot) { "第${c.slot + 1}节" },
                                                 fontSize = 12.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )

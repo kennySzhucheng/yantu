@@ -79,6 +79,12 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
+    // 版本号只在 app/build.gradle.kts 的 versionName 维护一处，这里从安装包读取
+    val appVersion = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "?"
+    }
 
     var showMorningTime by remember { mutableStateOf(false) }
     var showEveningTime by remember { mutableStateOf(false) }
@@ -300,7 +306,7 @@ fun SettingsScreen(
                 } else {
                     aboutLines.forEach { Text(it, fontSize = 13.sp) }
                 }
-                Text("${Config.appTitle} v1.6.0 · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${Config.appTitle} v$appVersion · 全离线运行，数据只存在本机", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
                     TextButton(onClick = {
                         runCatching {

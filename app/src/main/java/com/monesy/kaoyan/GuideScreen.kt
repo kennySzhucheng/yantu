@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -53,13 +54,24 @@ import androidx.compose.ui.unit.sp
  */
 
 /** 教程内容版本：完整教程或更新速览看完后写入；提升版本号会让老用户在下次启动看到「更新内容」 */
-const val TUTORIAL_VERSION = 4
+const val TUTORIAL_VERSION = 5
 
 // ---------- 更新内容速览（只给升级用户看，完整引导是全新用户的） ----------
 
 private data class UpdateGroup(val version: String, val items: List<String>)
 
 private val updateGroups = listOf(
+    UpdateGroup(
+        "v1.6.1",
+        listOf(
+            "🔒 隐私修复：移除 OCR 组件带入的 INTERNET 权限，并关闭系统云备份——真正无网络权限、数据只在本机",
+            "🔧 修复：修改考试信息后再也不会清空院校 / 专业 / 科目等档案信息",
+            "🔧 修复：应用过夜后仍显示「昨天」并写错打卡日期（跨天自动刷新）",
+            "🔧 修复：计划新增第 7 个阶段后，今日页 / 阶段页崩溃",
+            "🔧 修复：重大节点提醒触发后被错误续成每日任务，导致每天无效唤醒",
+            "🛠 课表：开学前不再误显示第 1 周课程；新安装空课表不再显示「第 N 教学周」（社区贡献）",
+        ),
+    ),
     UpdateGroup(
         "v1.6.0",
         listOf(
@@ -120,6 +132,7 @@ fun WhatsNewScreen(onDone: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
     ) {
@@ -247,6 +260,7 @@ fun TutorialScreen(onDone: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
+            .safeDrawingPadding()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -386,7 +400,7 @@ private val faqList = listOf(
 fun FaqScreen(onBack: () -> Unit) {
     var open by remember { mutableStateOf<Int?>(null) }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "返回") }
             Text("常见问题", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)

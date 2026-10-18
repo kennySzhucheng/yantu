@@ -10,6 +10,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -17,6 +20,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -29,6 +33,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -40,7 +45,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -64,6 +72,13 @@ class MainActivity : ComponentActivity() {
                 else -> scheduledDarkNow(darkStart, darkEnd)
             }
             KaoyanTheme(dark) {
+                // targetSdk 35 起系统强制 edge-to-edge：显式按主题切换状态栏/导航栏图标明暗，
+                // 否则浅色主题下白底白字（Android 15 上状态栏时间、电量几乎不可见）。
+                LaunchedEffect(dark) {
+                    val insets = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                    insets.isAppearanceLightStatusBars = !dark
+                    insets.isAppearanceLightNavigationBars = !dark
+                }
                 AppRoot()
             }
         }
@@ -163,13 +178,22 @@ private val DarkColors = darkColorScheme(
 fun AppRoot() {
     val context = LocalContext.current
 
-    // 配置加载失败：显示可读错误而不是白屏/崩溃
+    // 配置加载失败：给出可操作的恢复入口，而不是白屏死胡同
     if (Config.loadError != null) {
-        Box(Modifier.padding(24.dp)) {
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        Column(Modifier.padding(24.dp)) {
             Text(
-                "配置加载失败：${Config.loadError}\n\n请检查 assets/config 下的 JSON 配置文件。",
+                "配置加载失败：${Config.loadError}\n\n内置配置或导入的配置无法解析。可以清除用户配置层恢复内置模板（打卡记录会保留）：",
                 color = MaterialTheme.colorScheme.error,
             )
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = {
+                scope.launch {
+                    runCatching { UserConfig.clear(Store(context)) }
+                    ConfigLoader.load(context)
+                    (context as? android.app.Activity)?.recreate()
+                }
+            }) { Text("恢复内置配置并重试") }
         }
         return
     }
@@ -178,9 +202,9 @@ fun AppRoot() {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     // 引导分两套：全新用户（向导完成）看完整教程；升级用户（有数据、教程版本旧）只看「更新内容」速览
-    val onboardedInitial = remember { runBlocking { store.onboarded.first() } }
+    val onboardedInitial = remember { runCatching { runBlocking { store.onboarded.first() } }.getOrDefault(false) }
     val onboarded by store.onboarded.collectAsState(initial = onboardedInitial)
-    val tutVerInitial = remember { runBlocking { store.tutorialVersion.first() } }
+    val tutVerInitial = remember { runCatching { runBlocking { store.tutorialVersion.first() } }.getOrDefault(0) }
     var showTutorial by remember { mutableStateOf(false) }
     var showWhatsNew by remember { mutableStateOf(onboardedInitial && tutVerInitial < TUTORIAL_VERSION) }
     var wizardRerun by remember { mutableStateOf(false) }
@@ -368,10 +392,28 @@ fun AppRoot() {
     val themeMode by store.themeMode.collectAsState(initial = "light")
     val themeDarkStart by store.themeDarkStart.collectAsState(initial = "22:00")
     val themeDarkEnd by store.themeDarkEnd.collectAsState(initial = "07:00")
-    val today = remember { LocalDate.now() }
+    // 「今天」不能冻结：从后台/通知回到前台（ON_RESUME）或跨过 00:00 时重新计算，
+    // 否则次日会继续显示并写入昨天的打卡。
+    var today by remember { mutableStateOf(LocalDate.now()) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) today = LocalDate.now()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(today) {
+        while (true) {
+            val now = java.time.LocalDateTime.now()
+            val nextMidnight = now.toLocalDate().plusDays(1).atStartOfDay()
+            delay(java.time.Duration.between(now, nextMidnight).toMillis().coerceAtLeast(1_000L) + 200L)
+            today = LocalDate.now()
+        }
+    }
     val checked by store.checkinFor(today).collectAsState(initial = emptySet())
-    val yesterday = remember { today.minusDays(1) }
-    val dayBefore = remember { today.minusDays(2) }
+    val yesterday = remember(today) { today.minusDays(1) }
+    val dayBefore = remember(today) { today.minusDays(2) }
     val checkedYesterday by store.checkinFor(yesterday).collectAsState(initial = emptySet())
     val checkedDayBefore by store.checkinFor(dayBefore).collectAsState(initial = emptySet())
     val durations by store.durationOverrides.collectAsState(initial = emptyMap())
@@ -396,7 +438,9 @@ fun AppRoot() {
     // 上次看到的达标状态：奖励只在「未达标 → 达标」的边沿记录（首次进入对缺失记录补一次），
     // 用户手动删掉的今日奖励不会因继续勾选任务而"复活"
     var prevMet by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(checked) {
+    var prevMetDay by remember { mutableStateOf(today) }
+    LaunchedEffect(today, checked) {
+        if (prevMetDay != today) { prevMet = null; prevMetDay = today } // 跨天后重新判断
         streak = store.bottomLineStreak(today)
         totalDays = store.bottomTotalDays()
         weekSummary = Stats.weekSummary(store, today)
@@ -472,6 +516,12 @@ fun AppRoot() {
                     onWriteSection = { section, json ->
                         scope.launch {
                             UserConfig.putSection(store, section, json)
+                            reloadAfterConfigChange()
+                        }
+                    },
+                    onPatchSection = { section, json ->
+                        scope.launch {
+                            UserConfig.patchSection(store, section, json)
                             reloadAfterConfigChange()
                         }
                     },

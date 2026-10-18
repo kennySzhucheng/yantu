@@ -191,7 +191,13 @@ fun PlanEditorScreen(onBack: () -> Unit, onSave: (JSONObject) -> Unit) {
     }
 
     if (addingStage) {
-        StageEditDialog(initial = null, onDismiss = { addingStage = false }) {
+        // id 必须基于编辑器里当前的阶段列表分配，而不是全局 Plan.stages：
+        // 否则同一次编辑里连加两个阶段会拿到相同 id，保存后任务写到错误的阶段。
+        StageEditDialog(
+            initial = null,
+            newId = (stages.maxOfOrNull { it.id } ?: 0) + 1,
+            onDismiss = { addingStage = false },
+        ) {
             stages.add(it); addingStage = false
         }
     }
@@ -218,7 +224,7 @@ fun PlanEditorScreen(onBack: () -> Unit, onSave: (JSONObject) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StageEditDialog(initial: StageEdit?, onDismiss: () -> Unit, onConfirm: (StageEdit) -> Unit) {
+private fun StageEditDialog(initial: StageEdit?, newId: Int? = null, onDismiss: () -> Unit, onConfirm: (StageEdit) -> Unit) {
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var start by remember { mutableStateOf(initial?.start ?: LocalDate.now()) }
     var end by remember { mutableStateOf(initial?.end ?: LocalDate.now().plusMonths(3)) }
@@ -300,7 +306,7 @@ private fun StageEditDialog(initial: StageEdit?, onDismiss: () -> Unit, onConfir
             TextButton(
                 enabled = name.isNotBlank() && !end.isBefore(start),
                 onClick = {
-                    val nextId = initial?.id ?: ((Plan.stages.maxOfOrNull { it.id } ?: 0) + 1)
+                    val nextId = initial?.id ?: newId ?: ((Plan.stages.maxOfOrNull { it.id } ?: 0) + 1)
                     onConfirm(
                         StageEdit(
                             id = nextId, name = name.trim(), start = start, end = end,

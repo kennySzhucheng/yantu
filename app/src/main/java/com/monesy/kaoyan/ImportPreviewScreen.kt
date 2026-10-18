@@ -55,9 +55,8 @@ fun ImportPreviewScreen(
     onConfirm: (semesterStart: LocalDate, courses: List<TimetableParser.Course>) -> Unit,
 ) {
     val courses = remember { mutableStateListOf<TimetableParser.Course>().apply { addAll(initialCourses) } }
-    var semesterStart by remember {
-        mutableStateOf(LocalDate.now().with(DayOfWeek.MONDAY))
-    }
+    // 默认沿用当前课表的学期起始日：中途重导/追加课表时不要把「第 1 周」重置为本周一
+    var semesterStart by remember { mutableStateOf(Timetable.SEMESTER_START) }
     var showStartPicker by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<TimetableParser.Course?>(null) }
     var adding by remember { mutableStateOf(false) }

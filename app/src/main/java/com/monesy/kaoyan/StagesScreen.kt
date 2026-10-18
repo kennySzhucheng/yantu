@@ -98,7 +98,7 @@ fun StagesScreen(today: LocalDate, store: Store, onSaveStageTasks: (Int, List<Ta
                             .clickable { expanded = !expanded },
                     ) {
                         Text(
-                            "阶段${"①②③④⑤⑥"[stage.id - 1]} ${stage.name}",
+                            "阶段${stageBadge(stage.id)} ${stage.name}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer

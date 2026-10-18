@@ -60,6 +60,8 @@ fun ConfigManageScreen(
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onWriteSection: (section: String, json: JSONObject) -> Unit,
+    /** 只更新本段里给出的字段，保留院校/专业/科目等其它字段（修改考试信息用） */
+    onPatchSection: (section: String, json: JSONObject) -> Unit,
 ) {
     var showExamEdit by remember { mutableStateOf(false) }
     var showHolidayAdd by remember { mutableStateOf(false) }
@@ -181,7 +183,7 @@ fun ConfigManageScreen(
         ExamEditDialog(
             onDismiss = { showExamEdit = false },
             onConfirm = { name, date, score, start ->
-                onWriteSection(
+                onPatchSection(
                     UserConfig.SECTION_APP,
                     JSONObject()
                         .put("countdownLabel", "距 $name 初试")

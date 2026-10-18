@@ -35,6 +35,14 @@ object UserConfig {
         store.setUserConfigRaw(cur.toString())
     }
 
+    /** 浅合并单个段：只更新传入的键，保留该段其它已有字段（局部编辑用，避免整段覆盖丢数据） */
+    suspend fun patchSection(store: Store, section: String, patch: JSONObject) {
+        val cur = runCatching { JSONObject(store.userConfigRaw.first() ?: "{}") }.getOrElse { JSONObject() }
+        val merged = merge(cur.optJSONObject(section) ?: JSONObject(), patch)
+        cur.put(section, merged)
+        store.setUserConfigRaw(cur.toString())
+    }
+
     /** 整份替换（导入配置时用） */
     suspend fun putWhole(store: Store, json: JSONObject) = store.setUserConfigRaw(json.toString())
 

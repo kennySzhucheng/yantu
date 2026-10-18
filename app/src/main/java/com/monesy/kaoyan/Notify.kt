@@ -15,6 +15,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -169,6 +170,21 @@ class ReminderWorker(private val ctx: Context, params: WorkerParameters) : Corou
 
     override suspend fun doWork(): Result {
         val kind = inputData.getString("kind") ?: Notify.KIND_MORNING
+        // 任何一次读取/推送异常都不能断掉提醒链：异常记下后照常排下一次。
+        try {
+            runReminder(kind)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 单次失败不影响后续提醒
+        } finally {
+            runCatching { Notify.enqueueNext(ctx, kind) }
+        }
+        return Result.success()
+    }
+
+    /** 单次提醒的执行体（推送 / 静默跳过判断）；调度由 [doWork] 统一负责。 */
+    private suspend fun runReminder(kind: String) {
         val today = LocalDate.now()
         val nearest = Plan.nearestNodeLine(today)
         val store = Store(ctx)
@@ -281,10 +297,6 @@ class ReminderWorker(private val ctx: Context, params: WorkerParameters) : Corou
                 }
             }
         }
-
-        // 触发（或静默跳过）后链接下一次；若期间设置被关闭，enqueueNext 内部会改为取消
-        Notify.enqueueNext(ctx, kind)
-        return Result.success()
     }
 
     private fun push(

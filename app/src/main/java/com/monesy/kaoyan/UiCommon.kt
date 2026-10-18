@@ -39,6 +39,15 @@ fun dayName(day: Int): String = if (day == 0) "未定位" else weekDayNames.getO
 
 fun dateText(d: LocalDate): String = "${d.monthValue}月${d.dayOfMonth}日"
 
+private const val STAGE_MARKS = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"
+
+/**
+ * 阶段序号徽标：1–20 用带圈数字，超出范围回退为「(n)」。
+ * 不要再用 `"①②③④⑤⑥"[id - 1]`——计划编辑器允许新增阶段，id 会超过 6，硬编码会直接崩溃。
+ */
+fun stageBadge(id: Int): String =
+    if (id in 1..STAGE_MARKS.length) STAGE_MARKS[id - 1].toString() else "($id)"
+
 /**
  * 向导气泡提示：轻微脉动的小气泡，用于首次引导时解释"这一步是干什么的"。
  * 不打断输入，只是视觉提示；深浅色主题都走 tertiaryContainer。
