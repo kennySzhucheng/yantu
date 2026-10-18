@@ -220,6 +220,8 @@ Issue [#1「有用的！」](https://github.com/kennySzhucheng/yantu/issues/1)�
 - `rigong-v1.6.1-arm64.apk`（21.7 MB）
 - `rigong-v1.6.1-v7a.apk`（17.6 MB）
 - 构建环境：JDK 21 + Gradle 8.9 + Android SDK 35（脚本见 README 开发者章节）
+- 发布：https://github.com/kennySzhucheng/yantu/releases/tag/v1.6.1 （tag `v1.6.1`，main @ `96d6e47`）
+- 社区：PR #2 / #3 已关闭并注明合入与作者署名
 
 ### 9.4 仍未处理（留给 v1.7.0）
 
